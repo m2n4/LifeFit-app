@@ -1,0 +1,2183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>mylife. — 자취 생활 관리</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;}
+    body{background:#f8f7fc;color:#1f2937;}
+    button{font-family:inherit;transition:all 0.15s;}
+    button:hover{opacity:0.88;}
+    input,select,textarea{font-family:inherit;}
+    ::-webkit-scrollbar{width:5px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    ::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:3px;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+    .fade-in{animation:fadeIn 0.4s ease forwards;}
+    @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+    /* 모바일 탭바 */
+    .mobile-tab-bar{display:none;}
+    @media(max-width:767px){
+      .mobile-tab-bar{display:flex;}
+      .desktop-sidebar{display:none!important;}
+      .mobile-topbar{display:flex!important;}
+    }
+    @media(min-width:768px){
+      .mobile-topbar{display:none!important;}
+      .mobile-tab-bar{display:none!important;}
+      .desktop-sidebar{display:flex!important;}
+    }
+    /* 터치 친화적 */
+    button{-webkit-tap-highlight-color:transparent;}
+    input,select,textarea{font-size:16px!important;} /* iOS 줌 방지 */
+    @media(max-width:767px){
+      input,select,textarea{font-size:16px!important;}
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<!-- Firebase SDK -->
+<script type="module" id="firebase-init">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot, addDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBk7oAh970wN06ZokSBQ42OIXyT_Q91ULY",
+    authDomain: "mylife-app-f8568.firebaseapp.com",
+    projectId: "mylife-app-f8568",
+    storageBucket: "mylife-app-f8568.firebasestorage.app",
+    messagingSenderId: "430376673684",
+    appId: "1:430376673684:web:907a05eb290542b618af81",
+    measurementId: "G-T59TS3GE2P"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const googleProvider = new GoogleAuthProvider();
+
+  // React에서 접근 가능하도록 전역 노출
+  window._firebase = {
+    auth, db, googleProvider,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword,
+    signOut, signInWithPopup, updateProfile, onAuthStateChanged,
+    GoogleAuthProvider,
+    doc, getDoc, setDoc, updateDoc, collection, onSnapshot, addDoc, deleteDoc, serverTimestamp
+  };
+  window._firebaseReady = true;
+  window.dispatchEvent(new Event('firebaseReady'));
+</script>
+
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+// ============================================================
+// UTILS
+// ============================================================
+function useLocalStorage(key, init) {
+  const [val, setVal] = React.useState(() => {
+    try { const s=localStorage.getItem(key); return s?JSON.parse(s):init; } catch { return init; }
+  });
+  React.useEffect(() => { try { localStorage.setItem(key,JSON.stringify(val)); } catch{} }, [key,val]);
+  return [val, setVal];
+}
+function calcDaysLeft(d) {
+  const t=new Date(); t.setHours(0,0,0,0);
+  const e=new Date(d); e.setHours(0,0,0,0);
+  return Math.ceil((e-t)/(864e5));
+}
+function getFoodStatus(dl) {
+  if(dl<0)  return {label:'기간 초과',color:'#ef4444',bg:'#fef2f2',border:'#fecaca'};
+  if(dl===0)return {label:'오늘 마감',color:'#ef4444',bg:'#fef2f2',border:'#fecaca'};
+  if(dl<=3) return {label:`D-${dl}`,color:'#f97316',bg:'#fff7ed',border:'#fed7aa'};
+  if(dl<=7) return {label:`D-${dl}`,color:'#eab308',bg:'#fefce8',border:'#fef08a'};
+  return      {label:`D-${dl}`,color:'#22c55e',bg:'#f0fdf4',border:'#bbf7d0'};
+}
+function getToday() { return new Date().toISOString().split('T')[0]; }
+function todayLabel() {
+  const d=new Date(), days=['일','월','화','수','목','금','토'];
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} (${days[d.getDay()]})`;
+}
+function daysSince(s) {
+  if(!s) return null;
+  const t=new Date(); t.setHours(0,0,0,0);
+  const d=new Date(s); d.setHours(0,0,0,0);
+  return Math.floor((t-d)/(864e5));
+}
+function addDays(s,n) {
+  const d=new Date(s); d.setDate(d.getDate()+n);
+  return d.toISOString().split('T')[0];
+}
+
+// ============================================================
+// REPEAT SYSTEM
+// ============================================================
+const REPEAT_TYPES=[
+  {value:'daily',label:'매일'},
+  {value:'weekdays',label:'평일마다'},
+  {value:'weekend',label:'주말마다'},
+  {value:'weekly',label:'매주 특정 요일'},
+  {value:'interval',label:'N일마다'},
+  {value:'monthly',label:'매월 특정 날'},
+  {value:'none',label:'한 번만'},
+];
+const DAY_KR=['일','월','화','수','목','금','토'];
+
+function getRepeatLabel(r) {
+  if(!r) return '';
+  if(r.freq==='daily')    return '매일';
+  if(r.freq==='weekdays') return '평일 (월~금)';
+  if(r.freq==='weekend')  return '주말 (토·일)';
+  if(r.freq==='weekly')   return r.freqDays?.length?`매주 ${r.freqDays.map(d=>DAY_KR[d]).join('·')}요일`:'매주';
+  if(r.freq==='interval') return r.intervalDays?`${r.intervalDays}일마다`:'N일마다';
+  if(r.freq==='monthly')  return r.monthDay?`매월 ${r.monthDay}일`:'매월';
+  return '한 번만';
+}
+function isTodayItem(r) {
+  const d=new Date().getDay();
+  if(r.freq==='daily')    return true;
+  if(r.freq==='weekdays') return d>=1&&d<=5;
+  if(r.freq==='weekend')  return d===0||d===6;
+  if(r.freq==='weekly')   return (r.freqDays||[]).includes(d);
+  if(r.freq==='interval') {
+    if(!r.createdAt||!r.intervalDays) return false;
+    const c=new Date(r.createdAt); c.setHours(0,0,0,0);
+    const n=new Date(); n.setHours(0,0,0,0);
+    return Math.floor((n-c)/864e5)%r.intervalDays===0;
+  }
+  if(r.freq==='monthly') return new Date().getDate()===(r.monthDay||1);
+  return true;
+}
+function getNextItemDate(r) {
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=today.getDay();
+  if(isTodayItem(r)) return null;
+  if(r.freq==='weekdays') { const n=new Date(today); n.setDate(today.getDate()+(d===0?1:2)); return n; }
+  if(r.freq==='weekend')  { const n=new Date(today); n.setDate(today.getDate()+(6-d||7)); return n; }
+  if(r.freq==='weekly'&&r.freqDays?.length) {
+    let min=7;
+    r.freqDays.forEach(fd=>{ let diff=fd-d; if(diff<=0)diff+=7; if(diff<min)min=diff; });
+    const n=new Date(today); n.setDate(today.getDate()+min); return n;
+  }
+  if(r.freq==='interval'&&r.intervalDays) {
+    const c=new Date(r.createdAt||today); c.setHours(0,0,0,0);
+    const diff=Math.floor((today-c)/864e5);
+    const rem=r.intervalDays-(diff%r.intervalDays);
+    const n=new Date(today); n.setDate(today.getDate()+rem); return n;
+  }
+  if(r.freq==='monthly'&&r.monthDay) {
+    const n=new Date(today); n.setDate(r.monthDay);
+    if(n<=today) n.setMonth(n.getMonth()+1); return n;
+  }
+  return null;
+}
+function formatNextDate(nd) {
+  if(!nd) return null;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const diff=Math.ceil((nd-today)/864e5);
+  if(diff===1) return '내일';
+  if(diff===2) return '모레';
+  if(diff<=7)  return `${diff}일 후`;
+  return `${nd.getMonth()+1}/${nd.getDate()}`;
+}
+
+// ============================================================
+// DATA PRESETS
+// ============================================================
+const FOOD_PRESETS={
+  과일:[{emoji:'🍎',name:'사과',days:14,storage:'냉장'},{emoji:'🍌',name:'바나나',days:5,storage:'상온'},{emoji:'🍊',name:'귤',days:14,storage:'냉장'},{emoji:'🍇',name:'포도',days:7,storage:'냉장'},{emoji:'🍓',name:'딸기',days:4,storage:'냉장'},{emoji:'🫐',name:'블루베리',days:7,storage:'냉장'},{emoji:'🥝',name:'키위',days:10,storage:'냉장'},{emoji:'🍋',name:'레몬',days:14,storage:'냉장'}],
+  채소:[{emoji:'🥬',name:'대파',days:7,storage:'냉장'},{emoji:'🥕',name:'당근',days:14,storage:'냉장'},{emoji:'🧅',name:'양파',days:30,storage:'상온'},{emoji:'🧄',name:'마늘',days:30,storage:'냉장'},{emoji:'🥦',name:'브로콜리',days:5,storage:'냉장'},{emoji:'🥒',name:'오이',days:5,storage:'냉장'},{emoji:'🍅',name:'토마토',days:5,storage:'냉장'},{emoji:'🥔',name:'감자',days:30,storage:'상온'},{emoji:'🍄',name:'버섯',days:5,storage:'냉장'}],
+  정육:[{emoji:'🥩',name:'소고기',days:3,storage:'냉장'},{emoji:'🐷',name:'삼겹살',days:3,storage:'냉장'},{emoji:'🍗',name:'닭가슴살',days:2,storage:'냉장'},{emoji:'🥓',name:'베이컨',days:7,storage:'냉장'},{emoji:'🌭',name:'소시지',days:7,storage:'냉장'},{emoji:'🥚',name:'계란',days:14,storage:'냉장'},{emoji:'🦐',name:'새우',days:2,storage:'냉장'},{emoji:'🐟',name:'생선',days:2,storage:'냉장'}],
+  유제품:[{emoji:'🥛',name:'우유',days:7,storage:'냉장'},{emoji:'🫙',name:'요거트',days:10,storage:'냉장'},{emoji:'🧀',name:'치즈',days:14,storage:'냉장'},{emoji:'🧈',name:'버터',days:30,storage:'냉장'},{emoji:'🫙',name:'두부',days:5,storage:'냉장'}],
+  가공식품:[{emoji:'🥫',name:'참치캔',days:730,storage:'상온'},{emoji:'🍜',name:'라면',days:180,storage:'상온'},{emoji:'🥟',name:'만두',days:60,storage:'냉동'},{emoji:'🍱',name:'즉석밥',days:365,storage:'상온'},{emoji:'🥫',name:'스팸',days:730,storage:'상온'}],
+  '양념·소스':[{emoji:'🧂',name:'소금',days:730,storage:'상온'},{emoji:'🫙',name:'된장',days:365,storage:'냉장'},{emoji:'🌶️',name:'고추장',days:365,storage:'냉장'},{emoji:'🫙',name:'간장',days:365,storage:'상온'},{emoji:'🍯',name:'꿀',days:730,storage:'상온'},{emoji:'🫒',name:'올리브오일',days:365,storage:'상온'}],
+  '곡류·건식품':[{emoji:'🍚',name:'쌀',days:180,storage:'상온'},{emoji:'🍞',name:'식빵',days:5,storage:'상온'},{emoji:'🥜',name:'견과류',days:90,storage:'상온'},{emoji:'🍜',name:'파스타면',days:365,storage:'상온'}],
+};
+const QUICK_FOOD=[
+  {emoji:'🥛',name:'우유',category:'유제품',days:7,storage:'냉장'},
+  {emoji:'🥚',name:'계란',category:'정육',days:14,storage:'냉장'},
+  {emoji:'🥬',name:'대파',category:'채소',days:7,storage:'냉장'},
+  {emoji:'🫙',name:'두부',category:'유제품',days:5,storage:'냉장'},
+  {emoji:'🍚',name:'쌀',category:'곡류·건식품',days:180,storage:'상온'},
+  {emoji:'🍜',name:'라면',category:'가공식품',days:180,storage:'상온'},
+  {emoji:'🐷',name:'삼겹살',category:'정육',days:3,storage:'냉장'},
+  {emoji:'🥟',name:'만두',category:'가공식품',days:60,storage:'냉동'},
+];
+const CAT_THEME={
+  과일:{bg:'#fff7ed',border:'#fed7aa',accent:'#ea580c',icon:'🍎'},
+  채소:{bg:'#f0fdf4',border:'#bbf7d0',accent:'#16a34a',icon:'🥦'},
+  정육:{bg:'#fef2f2',border:'#fecaca',accent:'#dc2626',icon:'🥩'},
+  유제품:{bg:'#eff6ff',border:'#bfdbfe',accent:'#2563eb',icon:'🥛'},
+  가공식품:{bg:'#f5f3ff',border:'#ddd6fe',accent:'#7c3aed',icon:'🥫'},
+  '양념·소스':{bg:'#fefce8',border:'#fef08a',accent:'#ca8a04',icon:'🧂'},
+  '곡류·건식품':{bg:'#fdf4ff',border:'#f0abfc',accent:'#a21caf',icon:'🍚'},
+};
+
+// 생활 관리 섹션 정의
+const LIFE_SECTIONS={
+  루틴:{icon:'🌀',color:'#7c3aed',bg:'#f5f3ff',border:'#ddd6fe',label:'생활 루틴'},
+  생활:{icon:'🏠',color:'#2563eb',bg:'#eff6ff',border:'#bfdbfe',label:'생활 관리'},
+  청소:{icon:'🧹',color:'#16a34a',bg:'#f0fdf4',border:'#bbf7d0',label:'청소 관리'},
+};
+
+// 온보딩 프리셋
+const ONBOARDING_PRESETS={
+  '방금 이사':[ 
+    {section:'청소',emoji:'🚽',text:'화장실 청소',freq:'interval',intervalDays:7,guide:'변기·세면대·바닥 순서로'},
+    {section:'청소',emoji:'🧹',text:'바닥 청소기',freq:'interval',intervalDays:3,guide:'가구 아래까지 꼼꼼히'},
+    {section:'생활',emoji:'🧺',text:'빨래 돌리기',freq:'interval',intervalDays:4,guide:'세탁망 활용 추천'},
+    {section:'생활',emoji:'🗑️',text:'쓰레기 분리수거',freq:'interval',intervalDays:3,guide:'플라스틱·캔·종이 분리'},
+    {section:'루틴',emoji:'💧',text:'물 2잔 마시기',freq:'daily',guide:''},
+    {section:'루틴',emoji:'🪟',text:'환기하기',freq:'daily',guide:'하루 2번 이상'},
+  ],
+  '1년 이상':[
+    {section:'청소',emoji:'🚽',text:'화장실 청소',freq:'interval',intervalDays:7,guide:'변기·세면대·바닥 순서로'},
+    {section:'청소',emoji:'❄️',text:'냉장고 정리',freq:'interval',intervalDays:30,guide:'유통기한 지난 것 먼저'},
+    {section:'청소',emoji:'🌀',text:'배수구 청소',freq:'interval',intervalDays:14,guide:'베이킹소다+뜨거운 물'},
+    {section:'생활',emoji:'🧺',text:'빨래 돌리기',freq:'interval',intervalDays:3,guide:''},
+    {section:'생활',emoji:'🛏️',text:'침구 세탁',freq:'interval',intervalDays:14,guide:'40도 이하 세탁'},
+    {section:'생활',emoji:'🗑️',text:'쓰레기 분리수거',freq:'interval',intervalDays:3,guide:''},
+    {section:'루틴',emoji:'💧',text:'물 마시기',freq:'daily',guide:''},
+    {section:'루틴',emoji:'🪟',text:'환기하기',freq:'daily',guide:''},
+  ],
+  '오래됨':[
+    {section:'청소',emoji:'🚽',text:'화장실 청소',freq:'interval',intervalDays:7,guide:''},
+    {section:'청소',emoji:'🔥',text:'가스레인지 청소',freq:'interval',intervalDays:7,guide:'베이킹소다로 기름때 제거'},
+    {section:'청소',emoji:'❄️',text:'냉장고 정리',freq:'interval',intervalDays:30,guide:''},
+    {section:'청소',emoji:'🌀',text:'배수구 청소',freq:'interval',intervalDays:14,guide:''},
+    {section:'청소',emoji:'🪟',text:'창문 닦기',freq:'interval',intervalDays:30,guide:'신문지+세정제'},
+    {section:'생활',emoji:'🧺',text:'빨래 돌리기',freq:'interval',intervalDays:3,guide:''},
+    {section:'생활',emoji:'🛏️',text:'침구 세탁',freq:'interval',intervalDays:14,guide:''},
+    {section:'생활',emoji:'🗑️',text:'분리수거',freq:'interval',intervalDays:3,guide:''},
+    {section:'루틴',emoji:'💧',text:'물 마시기',freq:'daily',guide:''},
+    {section:'루틴',emoji:'🪟',text:'환기하기',freq:'daily',guide:''},
+    {section:'루틴',emoji:'💊',text:'비타민 챙기기',freq:'daily',guide:''},
+  ],
+};
+
+const LIFE_GUIDES=[
+  {id:1,category:'청소',emoji:'🚿',title:'화장실 청소 꿀팁',summary:'5분만 투자하면 반짝반짝',content:'변기: 세제 붓고 5분 후 솔로 닦기\n세면대: 치약으로 닦으면 광택 효과\n거울: 신문지로 닦으면 얼룩 없이 깨끗\n바닥: 욕실 전용 세제 + 솔로 구석까지',time:'주 1~2회',color:'#e0f2fe',textColor:'#0369a1'},
+  {id:2,category:'세탁',emoji:'👕',title:'세탁 방법 기초',summary:'옷감별 올바른 세탁법',content:'면: 30~40도 일반 세탁\n니트/울: 30도 이하 손세탁\n청바지: 뒤집어서 30도 세탁\n흰옷: 60도 이상 살균 세탁 가능',time:'주 1~2회',color:'#f0fdf4',textColor:'#166534'},
+  {id:3,category:'식재료',emoji:'🥬',title:'채소 신선하게 보관하기',summary:'오래 두고 먹는 보관 비법',content:'대파: 키친타올에 싸서 냉장\n시금치: 세워서 보관하면 오래가요\n당근: 신문지에 싸서 냉장 보관\n마늘: 껍질 벗겨 냉동하면 편리',time:'구매 후 바로',color:'#fefce8',textColor:'#854d0e'},
+  {id:4,category:'자취팁',emoji:'💡',title:'자취 필수 생활 팁',summary:'알아두면 진짜 편한 꿀팁',content:'전기요금: 대기전력 차단 멀티탭\n냄새: 베이킹소다로 냄새 제거\n결로: 환기 하루 2회로 곰팡이 예방\n배수구: 주 1회 뜨거운 물로 청소',time:'수시로',color:'#fdf4ff',textColor:'#7e22ce'},
+  {id:5,category:'청소',emoji:'🧹',title:'방 청소 루틴 만들기',summary:'15분이면 깔끔해지는 순서',content:'1. 물건 제자리 정리 (5분)\n2. 먼지 털기 위에서 아래로 (3분)\n3. 바닥 청소기 또는 물걸레 (5분)\n4. 쓰레기통 비우기 (2분)',time:'주 2~3회',color:'#fff1f2',textColor:'#be123c'},
+  {id:6,category:'식재료',emoji:'🍳',title:'냉장고 정리 원칙',summary:'넣기 전에 먼저 정리!',content:'위 칸: 바로 먹을 것\n중간 칸: 유제품, 계란\n아래 칸: 고기, 생선 (밀봉 필수)\n서랍: 채소, 과일 분리 보관',time:'장 보기 전',color:'#f0fdf4',textColor:'#14532d'},
+];
+
+const MY_TIP_COLORS=[
+  {color:'#fdf4ff',textColor:'#7e22ce'},{color:'#fefce8',textColor:'#854d0e'},
+  {color:'#f0fdf4',textColor:'#14532d'},{color:'#eff6ff',textColor:'#1e3a8a'},
+  {color:'#fff7ed',textColor:'#7c2d12'},{color:'#fef2f2',textColor:'#7f1d1d'},
+];
+// ─── 명언 ───
+const QUOTES=[
+  {text:"작은 습관이 큰 변화를 만들어요.",author:"제임스 클리어"},
+  {text:"오늘 하루도 스스로를 위한 선택을 해요.",author:"mylife."},
+  {text:"완벽하지 않아도 괜찮아, 오늘도 해냈으니까.",author:"mylife."},
+  {text:"정리된 공간은 정리된 마음을 만들어요.",author:""},
+  {text:"매일 1%씩 나아지면, 1년 후엔 37배 성장해요.",author:""},
+  {text:"혼자 살아가는 것도 배움이에요.",author:"mylife."},
+  {text:"작은 루틴이 쌓이면 인생이 달라져요.",author:""},
+  {text:"오늘 냉장고 정리만 해도 충분해요 💜",author:"mylife."},
+  {text:"나를 챙기는 것도 중요한 일이에요.",author:""},
+  {text:"하루에 한 가지만 잘해도 성공이에요.",author:"mylife."},
+  {text:"좋은 습관은 좋은 삶의 시작이에요.",author:""},
+  {text:"지금 이 순간도 잘 하고 있어요.",author:"mylife."},
+];
+function getTodayQuote() {
+  const idx = new Date().getDate() % QUOTES.length;
+  return QUOTES[idx];
+}
+
+// ─── 테마 색상 팔레트 ───
+const THEMES = [
+  {id:'purple', name:'보라', primary:'#7c3aed', light:'#ede9fe', mid:'#ddd6fe', border:'#c4b5fd', bg:'#f5f3ff', grad:'135deg,#f5f3ff,#ede9fe'},
+  {id:'rose',   name:'로즈', primary:'#e11d48', light:'#ffe4e6', mid:'#fecdd3', border:'#fda4af', bg:'#fff1f2', grad:'135deg,#fff1f2,#ffe4e6'},
+  {id:'sky',    name:'하늘', primary:'#0284c7', light:'#e0f2fe', mid:'#bae6fd', border:'#7dd3fc', bg:'#f0f9ff', grad:'135deg,#f0f9ff,#e0f2fe'},
+  {id:'green',  name:'연두', primary:'#16a34a', light:'#dcfce7', mid:'#bbf7d0', border:'#86efac', bg:'#f0fdf4', grad:'135deg,#f0fdf4,#dcfce7'},
+  {id:'orange', name:'오렌지',primary:'#ea580c', light:'#ffedd5', mid:'#fed7aa', border:'#fdba74', bg:'#fff7ed', grad:'135deg,#fff7ed,#ffedd5'},
+  {id:'slate',  name:'슬레이트',primary:'#475569',light:'#f1f5f9',mid:'#e2e8f0',border:'#cbd5e1', bg:'#f8fafc', grad:'135deg,#f8fafc,#f1f5f9'},
+];
+function getTheme(id) { return THEMES.find(t=>t.id===id) || THEMES[0]; }
+
+// ─── 전역 테마 컨텍스트 ───
+const ThemeCtx = React.createContext(THEMES[0]);
+function useTheme() { return React.useContext(ThemeCtx); }
+
+// ─── 반응형 훅 ───
+function useResponsive() {
+  const [width, setWidth] = React.useState(window.innerWidth);
+  React.useEffect(() => {
+    const fn = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return { isMob: width < 768, isTablet: width >= 768 && width < 1024, isDesktop: width >= 1024, width };
+}
+
+// ─── 동물 이모지 ───
+const ANIMALS = ['🐻','🐱','🐶','🐰','🦊','🐼','🐨','🐸','🐧','🦝','🐺','🦁','🐮','🐹','🦔','🐻‍❄️'];
+
+
+// ============================================================
+// SHARED UI
+// ============================================================
+const inp=(extra={})=>({width:'100%',padding:'10px 13px',border:'1.5px solid #e5e7eb',borderRadius:11,fontSize:14,outline:'none',background:'#fafafa',boxSizing:'border-box',...extra});
+
+function Modal({title,sub,onClose,children,maxWidth=380}) {
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div style={{background:'#fff',borderRadius:24,padding:'24px 22px',width:'100%',maxWidth,boxShadow:'0 24px 64px rgba(0,0,0,0.18)',maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:18}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:'#1f2937'}}>{title}</div>
+            {sub&&<div style={{fontSize:12,color:'#9ca3af',marginTop:2}}>{sub}</div>}
+          </div>
+          <button onClick={onClose} style={{width:30,height:30,borderRadius:'50%',border:'1.5px solid #e5e7eb',background:'#f9fafb',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#6b7280',fontSize:15,padding:0,margin:0,flexShrink:0}}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Btn({onClick,children,variant='primary',size='md',style:s={}}) {
+  const theme=useTheme();
+  const base={border:'none',borderRadius:12,fontWeight:700,cursor:'pointer',transition:'all 0.15s',margin:0};
+  const vars={
+    primary:{background:theme.primary,color:'#fff'},
+    green:{background:'#16a34a',color:'#fff'},
+    outline:{background:'#fff',color:theme.primary,border:`1.5px solid ${theme.mid}`},
+    ghost:{background:'transparent',color:theme.primary,border:`2px dashed ${theme.border}`},
+    danger:{background:'#fef2f2',color:'#ef4444',border:'1px solid #fecaca'},
+  };
+  const sizes={sm:{padding:'6px 12px',fontSize:12},md:{padding:'11px 18px',fontSize:14},lg:{padding:'14px',fontSize:14,width:'100%'}};
+  return <button onClick={onClick} style={{...base,...vars[variant],...sizes[size],...s}}>{children}</button>;
+}
+
+function CircleGauge({pct,size=80,color='#7c3aed',label,sub}) {
+  const r=(size-10)/2, circ=2*Math.PI*r, dash=circ*(pct/100);
+  return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+      <div style={{position:'relative',width:size,height:size}}>
+        <svg width={size} height={size} style={{transform:'rotate(-90deg)'}}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f3f4f6" strokeWidth={8}/>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={8}
+            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+            style={{transition:'stroke-dasharray 0.6s ease'}}/>
+        </svg>
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <span style={{fontSize:size>70?15:12,fontWeight:800,color:'#1f2937'}}>{pct}%</span>
+        </div>
+      </div>
+      {label&&<div style={{fontSize:12,fontWeight:700,color:'#374151'}}>{label}</div>}
+      {sub&&<div style={{fontSize:11,color:'#9ca3af'}}>{sub}</div>}
+    </div>
+  );
+}
+
+function RepeatPicker({form,setForm}) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      <div style={{fontSize:11,color:'#9ca3af',fontWeight:600,marginBottom:2}}>반복 설정</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(88px,1fr))',gap:5}}>
+        {REPEAT_TYPES.map(t=>(
+          <button key={t.value} onClick={()=>setForm(p=>({...p,freq:t.value}))} style={{
+            padding:'7px 5px',borderRadius:9,fontSize:11,fontWeight:form.freq===t.value?700:500,
+            border:`1.5px solid ${form.freq===t.value?'#7c3aed':'#e5e7eb'}`,
+            background:form.freq===t.value?'#ede9fe':'#fff',
+            color:form.freq===t.value?'#7c3aed':'#6b7280',cursor:'pointer',width:'auto',margin:0,textAlign:'center',
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {form.freq==='weekly'&&(
+        <div>
+          <div style={{fontSize:11,color:'#9ca3af',marginBottom:5}}>요일 선택</div>
+          <div style={{display:'flex',gap:5}}>
+            {DAY_KR.map((d,i)=>{
+              const sel=(form.freqDays||[]).includes(i);
+              return <button key={i} onClick={()=>setForm(p=>({...p,freqDays:sel?p.freqDays.filter(x=>x!==i):[...(p.freqDays||[]),i]}))} style={{width:32,height:32,borderRadius:'50%',fontSize:11,fontWeight:700,border:`1.5px solid ${sel?'#7c3aed':'#e5e7eb'}`,background:sel?'#7c3aed':'#fff',color:sel?'#fff':i===0?'#ef4444':i===6?'#3b82f6':'#374151',cursor:'pointer',padding:0,margin:0,minWidth:32,display:'flex',alignItems:'center',justifyContent:'center'}}>{d}</button>;
+            })}
+          </div>
+        </div>
+      )}
+      {form.freq==='interval'&&(
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:12,color:'#9ca3af',whiteSpace:'nowrap'}}>매</span>
+          <input type="number" min={1} max={90} value={form.intervalDays||2} onChange={e=>setForm(p=>({...p,intervalDays:Number(e.target.value)}))} style={{...inp(),width:80,textAlign:'center'}}/>
+          <span style={{fontSize:12,color:'#9ca3af',whiteSpace:'nowrap'}}>일마다</span>
+        </div>
+      )}
+      {form.freq==='monthly'&&(
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:12,color:'#9ca3af',whiteSpace:'nowrap'}}>매월</span>
+          <input type="number" min={1} max={31} value={form.monthDay||1} onChange={e=>setForm(p=>({...p,monthDay:Number(e.target.value)}))} style={{...inp(),width:80,textAlign:'center'}}/>
+          <span style={{fontSize:12,color:'#9ca3af',whiteSpace:'nowrap'}}>일</span>
+        </div>
+      )}
+      <div style={{fontSize:11,color:'#7c3aed',background:'#f5f3ff',padding:'6px 10px',borderRadius:8,border:'1px solid #ede9fe',fontWeight:600}}>
+        🔄 {getRepeatLabel(form)}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SIDEBAR
+// ============================================================
+const NAV=[
+  {id:'home',emoji:'🏠',label:'홈'},
+  {id:'food',emoji:'🥕',label:'식재료'},
+  {id:'life',emoji:'🌀',label:'생활 관리'},
+  {id:'hub',emoji:'🔖',label:'추천 허브'},
+  {id:'tips',emoji:'💡',label:'생활 팁'},
+  {id:'settings',emoji:'⚙️',label:'설정'},
+];
+
+function Sidebar({page,onNav,mobileOpen,onClose,userName,onLogout,animal,themeId}) {
+  const {isMob}=useResponsive();
+  const theme=getTheme(themeId);
+  const quote=getTodayQuote();
+  return (
+    <>
+      {mobileOpen&&<div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:40}}/>}
+      <aside className="desktop-sidebar" style={{width:200,minWidth:200,background:'#fff',borderRight:'1px solid #f0edf8',display:'flex',flexDirection:'column',padding:'22px 12px',position:'sticky',top:0,height:'100vh',overflowY:'auto',zIndex:50}}>
+        <div style={{padding:'4px 10px 16px',borderBottom:'1px solid #f0edf8',marginBottom:8}}>
+          <div onClick={()=>{onNav('home');onClose();}} style={{fontSize:19,fontWeight:900,color:theme.primary,letterSpacing:'-0.5px',cursor:'pointer'}}>🏠 mylife<span style={{color:theme.border}}>.</span></div>
+          <div style={{fontSize:11,color:theme.border,marginTop:2,fontWeight:600}}>나를 위한 작은 습관</div>
+        </div>
+        <nav style={{flex:1}}>
+          {NAV.map((n,idx)=>(
+            <React.Fragment key={n.id}>
+              {/* 생활관리 다음에 구분선 */}
+              {idx===3&&<div style={{height:1,background:'#f0edf8',margin:'6px 4px 8px'}}/>}
+              <button onClick={()=>{onNav(n.id);onClose();}} style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:'11px 13px',borderRadius:12,border:'none',background:page===n.id?theme.light:'transparent',color:page===n.id?theme.primary:'#6b7280',fontWeight:page===n.id?700:500,fontSize:14,cursor:'pointer',textAlign:'left',marginBottom:3,transition:'background 0.15s'}}>
+                <span style={{fontSize:16}}>{n.emoji}</span>{n.label}
+              </button>
+            </React.Fragment>
+          ))}
+        </nav>
+        {/* 캐릭터 + 명언 박스 */}
+        <div style={{background:'linear-gradient('+theme.grad+')',borderRadius:14,padding:'14px'}}>
+          <div style={{fontSize:20,marginBottom:4}}>{animal||'🐻'}</div>
+          <div style={{fontSize:12,fontWeight:700,color:theme.primary,marginBottom:6}}>
+            {userName?`${userName}님, 수고했어요!`:'오늘도 수고했어요!'}
+          </div>
+          {/* 오늘의 명언 */}
+          <div style={{borderTop:`1px solid ${theme.mid}`,paddingTop:8,marginBottom:10}}>
+            <div style={{fontSize:11,color:theme.primary,lineHeight:1.6,fontStyle:'italic'}}>
+              "{quote.text}"
+            </div>
+            {quote.author&&<div style={{fontSize:10,color:theme.border,marginTop:3,textAlign:'right'}}>— {quote.author}</div>}
+          </div>
+          {onLogout&&<button onClick={onLogout} style={{width:'100%',padding:'6px',borderRadius:9,border:`1px solid ${theme.mid}`,background:'#fff',color:'#9ca3af',fontSize:11,cursor:'pointer',margin:0,fontWeight:600}}>로그아웃</button>}
+        </div>
+      </aside>
+      {/* 모바일 드로어 사이드바 */}
+      {mobileOpen&&(
+        <aside style={{position:'fixed',left:0,top:0,width:260,height:'100vh',background:'#fff',zIndex:50,display:'flex',flexDirection:'column',padding:'22px 14px',overflowY:'auto',boxShadow:'4px 0 24px rgba(0,0,0,0.12)',animation:'slideUp 0.2s ease'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 6px 16px',borderBottom:'1px solid #f0edf8',marginBottom:8}}>
+            <div onClick={()=>{onNav('home');onClose();}} style={{fontSize:19,fontWeight:900,color:theme.primary,letterSpacing:'-0.5px',cursor:'pointer'}}>🏠 mylife<span style={{color:theme.border}}>.</span></div>
+            <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:20,color:'#9ca3af',padding:4,width:'auto',margin:0}}>✕</button>
+          </div>
+          <nav style={{flex:1}}>
+            {NAV.map((n,idx)=>(
+              <React.Fragment key={n.id}>
+                {idx===3&&<div style={{height:1,background:'#f0edf8',margin:'6px 4px 8px'}}/>}
+                <button onClick={()=>{onNav(n.id);onClose();}} style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'13px 14px',borderRadius:13,border:'none',background:page===n.id?theme.light:'transparent',color:page===n.id?theme.primary:'#6b7280',fontWeight:page===n.id?700:500,fontSize:15,cursor:'pointer',textAlign:'left',marginBottom:4,transition:'background 0.15s'}}>
+                  <span style={{fontSize:18}}>{n.emoji}</span>{n.label}
+                </button>
+              </React.Fragment>
+            ))}
+          </nav>
+          <div style={{background:'linear-gradient('+theme.grad+')',borderRadius:14,padding:'14px'}}>
+            <div style={{fontSize:20,marginBottom:4}}>{animal||'🐻'}</div>
+            <div style={{fontSize:12,fontWeight:700,color:theme.primary,marginBottom:6}}>{userName?`${userName}님, 수고했어요!`:'오늘도 수고했어요!'}</div>
+            <div style={{borderTop:'1px solid '+theme.mid,paddingTop:8,marginBottom:10}}>
+              <div style={{fontSize:11,color:theme.primary,lineHeight:1.6,fontStyle:'italic'}}>"{quote.text}"</div>
+              {quote.author&&<div style={{fontSize:10,color:theme.border,marginTop:3,textAlign:'right'}}>— {quote.author}</div>}
+            </div>
+            {onLogout&&<button onClick={onLogout} style={{width:'100%',padding:'7px',borderRadius:9,border:'1px solid '+theme.mid,background:'#fff',color:'#9ca3af',fontSize:11,cursor:'pointer',margin:0,fontWeight:600}}>로그아웃</button>}
+          </div>
+        </aside>
+      )}
+    </>
+  );
+}
+
+
+// ============================================================
+// HOME PAGE — 전면 개편
+// ============================================================
+function getGreeting() {
+  const h = new Date().getHours();
+  if(h < 6)  return {msg:'아직 늦은 시간이에요 🌙', sub:'충분한 휴식도 생활 관리예요'};
+  if(h < 12) return {msg:'좋은 아침이에요 ☀️', sub:'오늘도 상쾌하게 시작해봐요'};
+  if(h < 18) return {msg:'오후도 잘 보내고 있죠? 🌤️', sub:'오늘 할 일을 하나씩 정리해봐요'};
+  if(h < 22) return {msg:'오늘 하루도 수고했어요 🌇', sub:'저녁 루틴을 챙겨봐요'};
+  return {msg:'오늘도 고생했어요 🌙', sub:'내일을 위해 미리 준비해요'};
+}
+
+function QuickActionBtn({emoji, label, onClick}) {
+  const theme = useTheme();
+  return (
+    <button onClick={onClick} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'12px 6px',borderRadius:14,border:'1.5px solid '+theme.mid,background:'#fff',cursor:'pointer',width:'auto',margin:0,flex:1,transition:'all 0.15s',minWidth:0}}
+      onMouseEnter={e=>{e.currentTarget.style.background=theme.light;e.currentTarget.style.borderColor=theme.primary;}}
+      onMouseLeave={e=>{e.currentTarget.style.background='#fff';e.currentTarget.style.borderColor=theme.mid;}}>
+      <span style={{fontSize:22}}>{emoji}</span>
+      <span style={{fontSize:10,fontWeight:600,color:'#6b7280',textAlign:'center',lineHeight:1.3,wordBreak:'keep-all'}}>{label}</span>
+    </button>
+  );
+}
+
+function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck}) {
+  const theme = useTheme();
+  const todayDay = new Date().getDay();
+  const greeting = getGreeting();
+
+  // ── 우선순위 알림 생성 (최대 3개) ──
+  const alerts = [];
+  const urgentFoods = foods.map(f=>({...f,dl:calcDaysLeft(f.expiryDate)})).filter(f=>f.dl<=1&&f.dl>=0).sort((a,b)=>a.dl-b.dl);
+  urgentFoods.slice(0,1).forEach(f=>alerts.push({
+    id:`food-${f.id}`, emoji:f.emoji, level:'danger',
+    title: f.dl===0?`${f.name} 오늘이 마감이에요`:`${f.name} 내일까지예요`,
+    sub:`냉장고에서 먼저 꺼내요`, action:()=>onNav('food'),
+    bg:'#fef2f2', border:'#fecaca', accent:'#ef4444', btnLabel:'확인'
+  }));
+
+  const overdue = lifeItems.filter(c=>c.section!=='루틴'&&c.lastDone&&daysSince(c.lastDone)>=c.intervalDays&&!c.done);
+  overdue.slice(0,1).forEach(c=>alerts.push({
+    id:`life-${c.id}`, emoji:c.emoji, level:'warn',
+    title:`${c.text} 할 때가 됐어요`,
+    sub:`${daysSince(c.lastDone)}일 전에 했어요 · ${c.intervalDays}일 주기`,
+    action:()=>onNav('life'),
+    bg:'#fefce8', border:'#fef08a', accent:'#ca8a04', btnLabel:'확인'
+  }));
+
+  const todayRoutines = lifeItems.filter(c=>c.section==='루틴'&&isTodayItem(c));
+  const undoneRoutines = todayRoutines.filter(c=>!c.done);
+  if(undoneRoutines.length>0&&alerts.length<3) alerts.push({
+    id:'routine', emoji:'🌀', level:'info',
+    title:`오늘 루틴 ${undoneRoutines.length}개 남았어요`,
+    sub:`${todayRoutines.length-undoneRoutines.length}/${todayRoutines.length} 완료`,
+    action:()=>onNav('life'),
+    bg:theme.bg, border:theme.mid, accent:theme.primary, btnLabel:'하러가기'
+  });
+
+  const allDone = alerts.length===0;
+
+  // ── 임박 식재료 (D-5 이하) ──
+  const urgentList = foods.map(f=>({...f,dl:calcDaysLeft(f.expiryDate)})).filter(f=>f.dl<=5&&f.dl>=0).sort((a,b)=>a.dl-b.dl).slice(0,4);
+
+  // ── 생활 상태 요약 ──
+  const doneLife = lifeItems.filter(c=>c.done).length;
+  const totalLife = lifeItems.length;
+  const lifePct = totalLife?Math.round(doneLife/totalLife*100):0;
+  const streakCount = (streak||{count:0}).count;
+  const urgentCount = foods.filter(f=>calcDaysLeft(f.expiryDate)<=3&&calcDaysLeft(f.expiryDate)>=0).length;
+
+  // ── 상황별 추천 ──
+  const situRecs = getSituationalRecs(foods, lifeItems).filter(r=>r.type!=='cheer').slice(0,2);
+
+  return (
+    <div style={{paddingBottom:80}}>
+
+      {/* ① 환영 헤더 */}
+      <div style={{background:'linear-gradient(135deg,'+theme.primary+','+theme.border+')',borderRadius:24,padding:'22px 22px 18px',marginBottom:18,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',right:-10,top:-10,fontSize:80,opacity:0.08,lineHeight:1}}>🏠</div>
+        <div style={{fontSize:12,color:'rgba(255,255,255,0.75)',fontWeight:600,marginBottom:4}}>{todayLabel()}</div>
+        <div style={{fontSize:20,fontWeight:800,color:'#fff',marginBottom:4}}>
+          {userName?`${userName}님, ${greeting.msg}`:`${greeting.msg}`}
+        </div>
+        <div style={{fontSize:13,color:'rgba(255,255,255,0.8)'}}>{greeting.sub}</div>
+
+        {/* 스트릭 */}
+        {streakCount>0&&(
+          <div style={{marginTop:14,display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,0.2)',borderRadius:20,padding:'5px 12px'}}>
+            <span style={{fontSize:14}}>🔥</span>
+            <span style={{fontSize:12,color:'#fff',fontWeight:700}}>{streakCount}일 연속 달성 중</span>
+          </div>
+        )}
+      </div>
+
+      {/* ② 오늘 핵심 알림 (최대 3개) */}
+      <div style={{marginBottom:18}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+          <div style={{fontSize:15,fontWeight:800,color:'#1f2937'}}>
+            오늘 챙길 것들
+            {alerts.length>0&&<span style={{marginLeft:7,fontSize:11,fontWeight:700,color:'#fff',background:theme.primary,padding:'2px 8px',borderRadius:20}}>{alerts.length}</span>}
+          </div>
+        </div>
+
+        {allDone?(
+          <div style={{background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',borderRadius:20,padding:'24px',textAlign:'center',border:'1.5px solid #bbf7d0'}}>
+            <div style={{fontSize:40,marginBottom:8}}>🎉</div>
+            <div style={{fontSize:16,fontWeight:800,color:'#16a34a',marginBottom:4}}>오늘 할 일 다 했어요!</div>
+            <div style={{fontSize:13,color:'#4ade80'}}>정말 대단해요 {userName?`, ${userName}님`:''}! 💚</div>
+          </div>
+        ):(
+          <div style={{display:'flex',flexDirection:'column',gap:9}}>
+            {alerts.map(a=>(
+              <div key={a.id} onClick={a.action} style={{background:a.bg,border:`1.5px solid ${a.border}`,borderRadius:18,padding:'15px 16px',display:'flex',alignItems:'center',gap:13,cursor:'pointer',transition:'transform 0.15s'}}
+                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-1px)'}
+                onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+                <div style={{width:44,height:44,borderRadius:14,background:'rgba(255,255,255,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>{a.emoji}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:700,color:a.accent}}>{a.title}</div>
+                  <div style={{fontSize:11,color:'#9ca3af',marginTop:2}}>{a.sub}</div>
+                </div>
+                <span style={{fontSize:11,fontWeight:700,color:a.accent,background:'rgba(255,255,255,0.8)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap',flexShrink:0}}>{a.btnLabel} ›</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ③ 생활 상태 요약 — 3개 카드 */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:18}}>
+        <div style={{background:'#fff',borderRadius:16,padding:'14px 10px',textAlign:'center',border:'1.5px solid #f3f4f6'}}>
+          <div style={{fontSize:11,color:'#9ca3af',marginBottom:6,fontWeight:600}}>생활 달성</div>
+          <div style={{position:'relative',width:52,height:52,margin:'0 auto 6px'}}>
+            <svg width={52} height={52} style={{transform:'rotate(-90deg)'}}>
+              <circle cx={26} cy={26} r={20} fill="none" stroke="#f3f4f6" strokeWidth={6}/>
+              <circle cx={26} cy={26} r={20} fill="none" stroke={theme.primary} strokeWidth={6}
+                strokeDasharray={`${2*Math.PI*20*lifePct/100} ${2*Math.PI*20}`} strokeLinecap="round"
+                style={{transition:'stroke-dasharray 0.6s ease'}}/>
+            </svg>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#1f2937'}}>{lifePct}%</div>
+          </div>
+          <div style={{fontSize:11,color:'#9ca3af'}}>{doneLife}/{totalLife}</div>
+        </div>
+        <div style={{background:'#fff',borderRadius:16,padding:'14px 10px',textAlign:'center',border:'1.5px solid #f3f4f6',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+          <div style={{fontSize:11,color:'#9ca3af',marginBottom:6,fontWeight:600}}>연속 달성</div>
+          <div style={{fontSize:30,marginBottom:2}}>🔥</div>
+          <div style={{fontSize:20,fontWeight:800,color:'#ea580c',lineHeight:1}}>{streakCount}일</div>
+        </div>
+        <div style={{background:'#fff',borderRadius:16,padding:'14px 10px',textAlign:'center',border:`1.5px solid ${urgentCount>0?'#fecaca':'#f3f4f6'}`,cursor:'pointer'}} onClick={()=>onNav('food')}>
+          <div style={{fontSize:11,color:'#9ca3af',marginBottom:6,fontWeight:600}}>유통 임박</div>
+          <div style={{fontSize:30,marginBottom:2}}>🚨</div>
+          <div style={{fontSize:20,fontWeight:800,color:urgentCount>0?'#ef4444':'#22c55e',lineHeight:1}}>{urgentCount}개</div>
+        </div>
+      </div>
+
+      {/* ④ 유통기한 임박 식재료 */}
+      {urgentList.length>0&&(
+        <div style={{background:'#fff',borderRadius:18,padding:'16px 18px',border:'1.5px solid #f3f4f6',marginBottom:18}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>🍱 먼저 먹어야 해요</div>
+            <button onClick={()=>onNav('food')} style={{fontSize:12,color:theme.primary,background:'none',border:'none',cursor:'pointer',fontWeight:700,width:'auto',margin:0}}>전체 보기 →</button>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:7}}>
+            {urgentList.map(f=>{
+              const s=getFoodStatus(f.dl);
+              return (
+                <div key={f.id} style={{display:'flex',alignItems:'center',gap:11,padding:'10px 12px',borderRadius:12,background:s.bg,border:`1px solid ${s.border}`}}>
+                  <span style={{fontSize:20}}>{f.emoji}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:'#1f2937'}}>{f.name}</div>
+                    <div style={{fontSize:11,color:'#9ca3af'}}>{f.storage} 보관</div>
+                  </div>
+                  <div style={{fontSize:12,fontWeight:800,color:s.color,background:'#fff',padding:'3px 10px',borderRadius:20,border:`1px solid ${s.border}`}}>{s.label}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ⑤ 상황별 추천 */}
+      {situRecs.length>0&&(
+        <div style={{background:'#fff',borderRadius:18,padding:'16px 18px',border:'1.5px solid #f3f4f6',marginBottom:18}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>✨ {userName?`${userName}님을 위한 추천`:'오늘의 추천'}</div>
+            <button onClick={()=>onNav('hub')} style={{fontSize:12,color:theme.primary,background:'none',border:'none',cursor:'pointer',fontWeight:700,width:'auto',margin:0}}>더보기 →</button>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {situRecs.map((r,i)=>(
+              <div key={i} onClick={()=>onNav('hub')} style={{display:'flex',alignItems:'center',gap:12,padding:'11px 13px',borderRadius:12,background:theme.bg,border:`1px solid ${theme.mid}`,cursor:'pointer',transition:'opacity 0.15s'}}
+                onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
+                onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                <span style={{fontSize:22}}>{r.emoji}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:700,color:theme.primary}}>{r.title}</div>
+                  <div style={{fontSize:11,color:'#9ca3af',marginTop:1}}>{r.desc}</div>
+                </div>
+                <span style={{color:theme.primary,fontSize:14,opacity:0.5}}>›</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ⑥ 빠른 액션 */}
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#1f2937',marginBottom:10}}>⚡ 빠른 실행</div>
+        <div style={{display:'flex',gap:8}}>
+          <QuickActionBtn emoji="🥕" label="식재료 추가" onClick={()=>onNav('food')}/>
+          <QuickActionBtn emoji="🧺" label="빨래 완료" onClick={()=>{
+            const laundry=lifeItems.find(c=>c.text.includes('빨래')&&!c.done);
+            if(laundry&&onQuickCheck) onQuickCheck(laundry.id);
+            else onNav('life');
+          }}/>
+          <QuickActionBtn emoji="💧" label="물 마시기" onClick={()=>{
+            const water=lifeItems.find(c=>(c.text.includes('물')&&c.section==='루틴')&&!c.done);
+            if(water&&onQuickCheck) onQuickCheck(water.id);
+            else onNav('life');
+          }}/>
+          <QuickActionBtn emoji="🌀" label="루틴 보기" onClick={()=>onNav('life')}/>
+        </div>
+      </div>
+
+      {/* ⑦ 이번 주 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'16px 18px',border:'1.5px solid #f3f4f6'}}>
+        <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:10}}>이번 주 달성 현황</div>
+        <div style={{display:'flex',gap:5}}>
+          {['일','월','화','수','목','금','토'].map((d,i)=>(
+            <div key={i} style={{flex:1,height:36,borderRadius:10,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,gap:2,
+              background:i===todayDay?theme.primary:i<todayDay?theme.light:'#f9fafb',
+              color:i===todayDay?'#fff':i<todayDay?theme.primary:'#9ca3af',
+              border:i===todayDay?'none':`1px solid ${i<todayDay?theme.mid:'#f3f4f6'}`}}>
+              {d}
+              {i<todayDay&&<div style={{width:4,height:4,borderRadius:'50%',background:theme.primary,opacity:0.5}}/>}
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:11,color:'#9ca3af',marginTop:8,textAlign:'center'}}>연속 {streakCount}일째 생활 관리 중 🔥</div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// FOOD PAGE
+// ============================================================
+function DateModal({food,onConfirm,onClose}) {
+  const def=(()=>{const d=new Date();d.setDate(d.getDate()+(food?.days||7));return d.toISOString().split('T')[0];})();
+  const [date,setDate]=React.useState(def);
+  return (
+    <Modal title={`${food?.emoji} ${food?.name} 추가`} sub="유통기한을 선택해 주세요" onClose={onClose}>
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        <input type="date" value={date} min={getToday()} onChange={e=>setDate(e.target.value)} style={inp()}/>
+        <div style={{display:'flex',gap:8}}>
+          <Btn onClick={()=>onConfirm(date)} style={{flex:1}}>추가하기</Btn>
+          <Btn onClick={onClose} variant="outline" style={{flex:1}}>취소</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function FoodFormFields({form,setForm}) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:11}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 64px',gap:7}}>
+        <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>이름</div><input placeholder="식재료 이름" value={form.name||''} onChange={e=>setForm(p=>({...p,name:e.target.value}))} style={inp()} autoFocus/></div>
+        <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>이모지</div><input placeholder="🍽️" value={form.emoji||''} onChange={e=>setForm(p=>({...p,emoji:e.target.value}))} maxLength={2} style={inp({textAlign:'center',fontSize:20})}/></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}}>
+        <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>보관</div>
+          <select value={form.storage||'냉장'} onChange={e=>setForm(p=>({...p,storage:e.target.value}))} style={inp()}>
+            <option value="냉장">🧊 냉장</option><option value="냉동">❄️ 냉동</option><option value="상온">🌡️ 상온</option>
+          </select>
+        </div>
+        <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>구매일</div><input type="date" value={form.purchaseDate||getToday()} onChange={e=>setForm(p=>({...p,purchaseDate:e.target.value}))} style={inp()}/></div>
+      </div>
+      <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>유통기한 *</div><input type="date" value={form.expiryDate||''} onChange={e=>setForm(p=>({...p,expiryDate:e.target.value}))} style={inp()}/></div>
+      <div style={{display:'flex',alignItems:'center',gap:7,padding:'8px 11px',background:'#fdf4ff',borderRadius:9,border:'1px solid #e9d5ff'}}>
+        <span style={{fontSize:13}}>💡</span>
+        <span style={{fontSize:11,color:'#7e22ce',lineHeight:1.55}}>일반적인 보관 기준으로 유통기한이 자동 설정돼요. <span style={{fontWeight:700}}>제품 표기를 꼭 확인</span>하세요.</span>
+      </div>
+    </div>
+  );
+}
+
+function FoodPage({foods,onAdd,onDelete,onEdit}) {
+  const theme=useTheme();
+  const [activeCat,setActiveCat]=React.useState('과일');
+  const [filterStorage,setFilterStorage]=React.useState('전체');
+  const [pending,setPending]=React.useState(null);
+  const [editTarget,setEditTarget]=React.useState(null);
+  const [showAdd,setShowAdd]=React.useState(false);
+  const [addForm,setAddForm]=React.useState({name:'',emoji:'',storage:'냉장',expiryDate:'',purchaseDate:getToday()});
+  const [editForm,setEditForm]=React.useState({});
+  const [search,setSearch]=React.useState('');
+  const [quickList,setQuickList]=React.useState(QUICK_FOOD);
+  const [showQuickEdit,setShowQuickEdit]=React.useState(false);
+  const [editingQuick,setEditingQuick]=React.useState(null);
+  const [quickForm,setQuickForm]=React.useState({});
+
+  const SICONS={냉장:'🧊',냉동:'❄️',상온:'🌡️'};
+  const withStatus=foods.map(f=>({...f,dl:calcDaysLeft(f.expiryDate),status:getFoodStatus(calcDaysLeft(f.expiryDate))})).sort((a,b)=>a.dl-b.dl);
+  const filtered=withStatus.filter(f=>{
+    if(filterStorage!=='전체'&&f.storage!==filterStorage)return false;
+    if(search&&!f.name.includes(search))return false;
+    return true;
+  });
+  const alreadyAdded=(name,cat)=>foods.some(f=>f.name===name&&f.category===cat);
+
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:14}}>
+        <div><div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:3}}>🥕 식재료 관리</div><div style={{fontSize:13,color:'#9ca3af'}}>유통기한을 한눈에 확인하세요</div></div>
+        <Btn onClick={()=>{setAddForm({name:'',emoji:'',storage:'냉장',expiryDate:'',purchaseDate:getToday()});setShowAdd(true);}}>+ 직접 추가</Btn>
+      </div>
+
+      <div style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',background:'linear-gradient(135deg,#fdf4ff,#ede9fe)',borderRadius:13,border:'1.5px solid #d8b4fe',marginBottom:16}}>
+        <span style={{fontSize:17}}>💡</span>
+        <div><div style={{fontSize:12,fontWeight:700,color:'#6d28d9',marginBottom:1}}>유통기한 자동 설정 안내</div><div style={{fontSize:11,color:'#7c3aed'}}>일반적인 보관 기준으로 자동 설정돼요. <span style={{fontWeight:700}}>제품 표기를 꼭 확인</span>하세요.</div></div>
+      </div>
+
+      {/* 현황 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'17px 19px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:7}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>냉장고 현황 <span style={{fontSize:12,color:'#9ca3af',fontWeight:400}}>({foods.length}개)</span></div>
+          <input type="text" placeholder="검색..." value={search} onChange={e=>setSearch(e.target.value)} style={inp({width:120,padding:'6px 10px',fontSize:12,borderRadius:20})}/>
+        </div>
+        <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+          {['전체','냉장','냉동','상온'].map(c=><button key={c} onClick={()=>setFilterStorage(c)} style={{padding:'4px 13px',borderRadius:20,border:'none',background:filterStorage===c?theme.primary:'#f3f4f6',color:filterStorage===c?'#fff':'#6b7280',fontSize:12,fontWeight:filterStorage===c?700:500,cursor:'pointer',width:'auto',margin:0}}>{c}</button>)}
+        </div>
+        {/* 색상 범례 */}
+        <div style={{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
+          <span style={{fontSize:11,color:'#9ca3af',fontWeight:600}}>색상</span>
+          {[{color:'#22c55e',bg:'#f0fdf4',border:'#bbf7d0',label:'여유'},{color:'#eab308',bg:'#fefce8',border:'#fef08a',label:'주의'},{color:'#f97316',bg:'#fff7ed',border:'#fed7aa',label:'임박'},{color:'#ef4444',bg:'#fef2f2',border:'#fecaca',label:'위험'}].map(s=>(
+            <div key={s.label} style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:9,height:9,borderRadius:2,background:s.bg,border:`1.5px solid ${s.border}`}}/><span style={{fontSize:11,color:s.color,fontWeight:600}}>{s.label}</span></div>
+          ))}
+        </div>
+        {filtered.length===0?<div style={{textAlign:'center',padding:'22px 0',color:'#9ca3af',fontSize:13}}><div style={{fontSize:28,marginBottom:6}}>📭</div>식재료가 없어요!</div>:(
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:8}}>
+            {filtered.map(f=>(
+              <div key={f.id} style={{background:f.status.bg,border:`1.5px solid ${f.status.border}`,borderRadius:14,padding:'11px 13px',display:'flex',flexDirection:'column',gap:3,position:'relative'}}>
+                <button onClick={()=>onDelete(f.id)} style={{position:'absolute',top:8,right:8,background:'none',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:12,padding:2,width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color='#ef4444'} onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</button>
+                <div style={{fontSize:22,marginBottom:2}}>{f.emoji}</div>
+                <div style={{fontSize:13,fontWeight:700,color:'#1f2937'}}>{f.name}</div>
+                <div style={{fontSize:11,color:'#9ca3af'}}>{SICONS[f.storage]} {f.storage}</div>
+                <div style={{marginTop:4,fontSize:11,fontWeight:700,color:f.status.color,background:'#fff',padding:'2px 8px',borderRadius:20,border:`1px solid ${f.status.border}`,display:'inline-block',width:'fit-content'}}>{f.status.label}</div>
+                <button onClick={()=>{setEditTarget(f);setEditForm({name:f.name,emoji:f.emoji,storage:f.storage||'냉장',expiryDate:f.expiryDate,purchaseDate:f.purchaseDate});}} style={{marginTop:3,padding:'4px',borderRadius:7,border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:11,cursor:'pointer',width:'auto'}}>수정</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 자주 추가 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'17px 19px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>⭐ 자주 추가하는 식재료</div>
+          <button onClick={()=>setShowQuickEdit(!showQuickEdit)} style={{fontSize:11,fontWeight:700,padding:'4px 11px',borderRadius:20,border:`1.5px solid ${showQuickEdit?'#7c3aed':'#e5e7eb'}`,background:showQuickEdit?'#ede9fe':'#fff',color:showQuickEdit?'#7c3aed':'#9ca3af',cursor:'pointer',width:'auto',margin:0}}>{showQuickEdit?'완료':'편집'}</button>
+        </div>
+        <div style={{fontSize:12,color:'#9ca3af',marginBottom:11}}>탭 하면 바로 추가돼요</div>
+        {showQuickEdit?(
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {quickList.map((p,idx)=>(
+              <div key={idx} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 10px',borderRadius:10,background:'#fafafa',border:'1.5px solid #f3f4f6'}}>
+                {editingQuick===idx?(
+                  <div style={{flex:1,display:'grid',gridTemplateColumns:'42px 1fr 74px 50px',gap:5,alignItems:'center'}}>
+                    <input value={quickForm.emoji||''} onChange={e=>setQuickForm(p=>({...p,emoji:e.target.value}))} maxLength={2} style={inp({padding:'5px',textAlign:'center',fontSize:17,background:'#fff'})}/>
+                    <input value={quickForm.name||''} onChange={e=>setQuickForm(p=>({...p,name:e.target.value}))} style={inp({padding:'6px 9px',background:'#fff'})}/>
+                    <select value={quickForm.category||'냉장'} onChange={e=>setQuickForm(p=>({...p,category:e.target.value}))} style={inp({padding:'6px 4px',background:'#fff',fontSize:11})}>
+                      <option value="냉장">🧊냉장</option><option value="냉동">❄️냉동</option><option value="상온">🌡️상온</option>
+                    </select>
+                    <button onClick={()=>{const n=[...quickList];n[idx]={...quickForm};setQuickList(n);setEditingQuick(null);}} style={{padding:'6px',borderRadius:7,border:'none',background:'#7c3aed',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',width:'auto',margin:0}}>저장</button>
+                  </div>
+                ):(
+                  <><span style={{fontSize:17}}>{p.emoji}</span><span style={{flex:1,fontSize:13,fontWeight:600,color:'#374151'}}>{p.name}</span>
+                  <span style={{fontSize:10,color:'#9ca3af',background:'#f3f4f6',padding:'1px 6px',borderRadius:20}}>{p.category}</span>
+                  <button onClick={()=>{setEditingQuick(idx);setQuickForm({...p});}} style={{padding:'3px 8px',borderRadius:7,border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:11,cursor:'pointer',width:'auto',margin:0}}>수정</button>
+                  <button onClick={()=>setQuickList(quickList.filter((_,i)=>i!==idx))} style={{padding:'3px 6px',borderRadius:7,border:'none',background:'none',color:'#d1d5db',fontSize:13,cursor:'pointer',width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color='#ef4444'} onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</button></>
+                )}
+              </div>
+            ))}
+            <Btn variant="ghost" size="sm" onClick={()=>{setQuickList([...quickList,{emoji:'🍽️',name:'새 항목',category:'냉장',days:7}]);setEditingQuick(quickList.length);setQuickForm({emoji:'🍽️',name:'새 항목',category:'냉장',days:7});}}>+ 항목 추가</Btn>
+          </div>
+        ):(
+          <div style={{display:'flex',flexWrap:'wrap',gap:7}}>
+            {quickList.map((p,idx)=>{
+              const added=alreadyAdded(p.name,p.category);
+              return <button key={idx} onClick={()=>!added&&setPending({...p})} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 13px',borderRadius:30,border:`1.5px solid ${added?'#7c3aed':'#e5e7eb'}`,background:added?'#ede9fe':'#fff',color:added?'#7c3aed':'#374151',fontSize:13,fontWeight:500,cursor:added?'default':'pointer',width:'auto',margin:0}}>
+                <span style={{fontSize:14}}>{p.emoji}</span>{p.name}{added&&<span style={{fontSize:10}}>✓</span>}
+              </button>;
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 카테고리별 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'17px 19px',border:'1.5px solid #f3f4f6'}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#1f2937',marginBottom:12}}>📂 카테고리별 추가</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(76px,1fr))',gap:6,marginBottom:12}}>
+          {Object.keys(CAT_THEME).map(c=>{
+            const t=CAT_THEME[c],isA=activeCat===c;
+            return <button key={c} onClick={()=>setActiveCat(c)} style={{padding:'10px 4px',borderRadius:12,border:`2px solid ${isA?t.accent:t.border}`,background:isA?t.bg:'#fafafa',cursor:'pointer',width:'auto',margin:0,textAlign:'center',transition:'all 0.15s'}} onMouseEnter={e=>{if(!isA){e.currentTarget.style.borderColor=t.accent;e.currentTarget.style.background=t.bg;}}} onMouseLeave={e=>{if(!isA){e.currentTarget.style.borderColor=t.border;e.currentTarget.style.background='#fafafa';}}}>
+              <div style={{fontSize:17,marginBottom:2}}>{t.icon}</div>
+              <div style={{fontSize:11,fontWeight:700,color:isA?t.accent:'#374151',lineHeight:1.2}}>{c}</div>
+            </button>;
+          })}
+        </div>
+        <div style={{background:CAT_THEME[activeCat].bg,borderRadius:12,padding:'12px',border:`1px solid ${CAT_THEME[activeCat].border}`}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:7}}>
+            {(FOOD_PRESETS[activeCat]||[]).map(p=>{
+              const added=alreadyAdded(p.name,activeCat);
+              return <button key={p.name} onClick={()=>!added&&setPending({...p,category:activeCat})} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'11px 5px',borderRadius:12,border:`1.5px solid ${added?CAT_THEME[activeCat].accent:'#e5e7eb'}`,background:added?`${CAT_THEME[activeCat].accent}18`:'#fff',cursor:added?'default':'pointer',position:'relative',width:'auto',margin:0,transition:'all 0.15s'}} onMouseEnter={e=>{if(!added){e.currentTarget.style.borderColor=CAT_THEME[activeCat].accent;e.currentTarget.style.background=`${CAT_THEME[activeCat].accent}0d`;}}} onMouseLeave={e=>{if(!added){e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.background='#fff';}}}>
+                {added&&<div style={{position:'absolute',top:4,right:4,width:13,height:13,borderRadius:'50%',background:CAT_THEME[activeCat].accent,color:'#fff',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✓</div>}
+                <span style={{fontSize:22}}>{p.emoji}</span>
+                <span style={{fontSize:11,fontWeight:600,color:added?CAT_THEME[activeCat].accent:'#374151',textAlign:'center'}}>{p.name}</span>
+                <div style={{display:'flex',gap:2,alignItems:'center'}}>
+                  <span style={{fontSize:9,color:'#9ca3af'}}>{p.days}일</span>
+                  <span style={{fontSize:9,fontWeight:700,padding:'1px 4px',borderRadius:5,color:p.storage==='냉장'?'#2563eb':p.storage==='냉동'?'#0891b2':'#d97706',background:p.storage==='냉장'?'#dbeafe':p.storage==='냉동'?'#cffafe':'#fef3c7'}}>{p.storage}</span>
+                </div>
+              </button>;
+            })}
+          </div>
+        </div>
+      </div>
+
+      {pending&&<DateModal food={pending} onConfirm={date=>{onAdd({id:Date.now(),emoji:pending.emoji,name:pending.name,category:pending.category,storage:pending.storage||'냉장',expiryDate:date,purchaseDate:getToday()});setPending(null);}} onClose={()=>setPending(null)}/>}
+      {showAdd&&(
+        <Modal title="✏️ 직접 추가" onClose={()=>setShowAdd(false)}>
+          <FoodFormFields form={addForm} setForm={setAddForm}/>
+          <div style={{display:'flex',gap:8,marginTop:14}}>
+            <Btn onClick={()=>{if(!addForm.name.trim()||!addForm.expiryDate)return;onAdd({id:Date.now(),...addForm,emoji:addForm.emoji||'🍽️'});setShowAdd(false);}} style={{flex:1}}>추가하기</Btn>
+            <Btn onClick={()=>setShowAdd(false)} variant="outline" style={{flex:1}}>취소</Btn>
+          </div>
+        </Modal>
+      )}
+      {editTarget&&(
+        <Modal title={`${editTarget.emoji} ${editTarget.name} 수정`} sub="식재료 수정" onClose={()=>setEditTarget(null)}>
+          <FoodFormFields form={editForm} setForm={setEditForm}/>
+          <div style={{display:'flex',gap:8,marginTop:14}}>
+            <Btn onClick={()=>{if(!editForm.name.trim()||!editForm.expiryDate)return;onEdit(editTarget.id,{...editForm,emoji:editForm.emoji||'🍽️'});setEditTarget(null);}} style={{flex:1}}>수정하기</Btn>
+            <Btn onClick={()=>setEditTarget(null)} variant="outline" style={{flex:1}}>취소</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+// ============================================================
+// LIFE PAGE — 생활 관리 (루틴 + 생활 + 청소 통합)
+// ============================================================
+
+// 아이템 카드 — 개별 컴포넌트로 분리해서 훅 사용
+function LifeItemCard({c, onToggle, onDelete, openEdit, updateStreak, lifeItems}) {
+  const theme = useTheme();
+  const [guideOpen, setGuideOpen] = React.useState(false);
+  const sec = LIFE_SECTIONS[c.section] || LIFE_SECTIONS['루틴'];
+  const isToday = isTodayItem(c);
+  const since = c.lastDone ? daysSince(c.lastDone) : null;
+  const dLeft = c.section !== '루틴' && c.lastDone ? calcDaysLeft(addDays(c.lastDone, c.intervalDays)) : null;
+  const isOverdue = dLeft !== null && dLeft < 0;
+  const isSoon = dLeft !== null && dLeft >= 0 && dLeft <= 2;
+  const progress = c.section !== '루틴' && since !== null ? Math.min(100, Math.round(since / c.intervalDays * 100)) : null;
+
+  function StatusLabel() {
+    if(c.section === '루틴') {
+      const nd = !isToday ? getNextItemDate(c) : null;
+      const nextLabel = nd ? formatNextDate(nd) : null;
+      if(c.done) return <span style={{fontSize:11,fontWeight:700,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:20,border:'1px solid #bbf7d0'}}>✓ 완료</span>;
+      if(isToday) return <span style={{fontSize:11,fontWeight:700,color:theme.primary,background:theme.light,padding:'2px 8px',borderRadius:20,border:'1px solid #ddd6fe'}}>오늘</span>;
+      return <span style={{fontSize:11,color:'#9ca3af'}}>다음: {nextLabel || '-'}</span>;
+    }
+    if(c.done) return <span style={{fontSize:11,fontWeight:700,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:20,border:'1px solid #bbf7d0'}}>✓ 완료</span>;
+    if(since === null) return <span style={{fontSize:11,color:'#9ca3af',background:'#f3f4f6',padding:'2px 8px',borderRadius:20}}>아직 안 함</span>;
+    if(isOverdue) return <span style={{fontSize:11,fontWeight:700,color:'#ef4444',background:'#fef2f2',padding:'2px 8px',borderRadius:20,border:'1px solid #fecaca'}}>⚠️ {Math.abs(dLeft)}일 지남</span>;
+    if(isSoon) return <span style={{fontSize:11,fontWeight:700,color:'#f97316',background:'#fff7ed',padding:'2px 8px',borderRadius:20,border:'1px solid #fed7aa'}}>슬슬 할 때</span>;
+    return <span style={{fontSize:11,color:'#22c55e',background:'#f0fdf4',padding:'2px 8px',borderRadius:20,border:'1px solid #bbf7d0'}}>D+{since}/{c.intervalDays}일</span>;
+  }
+
+  return (
+    <div style={{background:'#fff',borderRadius:14,border:`1.5px solid ${isOverdue?'#fecaca':'#f3f4f6'}`,overflow:'hidden'}}>
+      <div style={{padding:'13px 15px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:11,opacity:(!isToday&&c.section==='루틴')?0.5:1}}>
+          <div onClick={()=>{
+            if(c.section==='루틴'&&!isToday) return;
+            onToggle(c.id);
+            if(c.section==='루틴') {
+              const nd = lifeItems.filter(x=>x.section==='루틴'&&x.done).length + (c.done?-1:1);
+              updateStreak && updateStreak(nd, lifeItems.filter(x=>x.section==='루틴').length);
+            }
+          }} style={{width:22,height:22,borderRadius:6,flexShrink:0,cursor:(c.section==='루틴'&&!isToday)?'default':'pointer',background:c.done?sec.color:'transparent',border:`2px solid ${c.done?sec.color:'#d1d5db'}`,display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
+            {c.done&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}
+          </div>
+          <span style={{fontSize:18,flexShrink:0}}>{c.emoji||'💧'}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:600,color:c.done?'#9ca3af':'#1f2937',textDecoration:c.done?'line-through':'none'}}>{c.text}</div>
+            <div style={{fontSize:11,color:'#9ca3af',marginTop:2,display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+              <span style={{background:sec.bg,color:sec.color,padding:'1px 6px',borderRadius:20,border:`1px solid ${sec.border}`,fontWeight:600,fontSize:10}}>{sec.icon} {c.section}</span>
+              {c.section==='루틴'?(
+                <span style={{background:'#f3f4f6',padding:'1px 6px',borderRadius:20,fontSize:10}}>🔄 {getRepeatLabel(c)}</span>
+              ):(
+                <span style={{fontSize:10}}>⏱ {c.intervalDays}일 주기{since!==null?` · ${since}일 전`:''}</span>
+              )}
+            </div>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4,flexShrink:0}}>
+            <StatusLabel/>
+            <div style={{display:'flex',gap:4}}>
+              {c.guide&&<button onClick={()=>setGuideOpen(!guideOpen)} style={{fontSize:10,color:theme.primary,background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:7,padding:'2px 7px',cursor:'pointer',width:'auto',margin:0}}>{guideOpen?'접기':'방법'}</button>}
+              <button onClick={()=>openEdit(c)} style={{background:'none',border:'none',cursor:'pointer',color:theme.border,fontSize:13,padding:0,width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color=theme.primary} onMouseLeave={e=>e.currentTarget.style.color=theme.border}>✎</button>
+              <button onClick={()=>onDelete(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:13,padding:0,width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color='#ef4444'} onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</button>
+            </div>
+          </div>
+        </div>
+        {guideOpen&&c.guide&&(
+          <div style={{marginTop:10,padding:'10px 12px',background:'#f5f3ff',borderRadius:10,border:'1px solid #ede9fe',fontSize:12,color:'#6d28d9',lineHeight:1.7,whiteSpace:'pre-wrap'}}>{c.guide}</div>
+        )}
+      </div>
+      {progress!==null&&!c.done&&(
+        <div style={{height:3,background:'#f3f4f6'}}>
+          <div style={{height:'100%',width:`${progress}%`,background:isOverdue?'#ef4444':isSoon?'#f97316':'#22c55e',transition:'width 0.5s'}}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,updateStreak}) {
+  const theme=useTheme();
+  const [activeSection,setActiveSection]=React.useState('전체');
+  const [filterDone,setFilterDone]=React.useState('전체');
+  const [selectedDayStr,setSelectedDayStr]=React.useState(null);
+  const [showAddModal,setShowAddModal]=React.useState(false);
+  const [editTarget,setEditTarget]=React.useState(null);
+  const [showPackModal,setShowPackModal]=React.useState(false);
+  const emptyForm={text:'',emoji:'💧',section:'루틴',freq:'daily',freqDays:[],intervalDays:7,monthDay:1,guide:''};
+  const [form,setForm]=React.useState(emptyForm);
+
+  const done=lifeItems.filter(c=>c.done).length;
+  const total=lifeItems.length;
+  const pct=total?Math.round(done/total*100):0;
+
+  const sectionStats=Object.keys(LIFE_SECTIONS).map(s=>({
+    s, done:lifeItems.filter(c=>c.section===s&&c.done).length,
+    total:lifeItems.filter(c=>c.section===s).length,
+  }));
+
+  const filtered=lifeItems
+    .filter(c=>{
+      if(activeSection!=='전체'&&c.section!==activeSection)return false;
+      if(filterDone==='완료'&&!c.done)return false;
+      if(filterDone==='미완료'&&c.done)return false;
+      return true;
+    })
+    .sort((a,b)=>{
+      const aOver=a.section!=='루틴'&&a.lastDone?daysSince(a.lastDone)>=a.intervalDays:false;
+      const bOver=b.section!=='루틴'&&b.lastDone?daysSince(b.lastDone)>=b.intervalDays:false;
+      const aToday=isTodayItem(a), bToday=isTodayItem(b);
+      if(aOver&&!bOver)return -1; if(!aOver&&bOver)return 1;
+      if(aToday&&!bToday)return -1; if(!aToday&&bToday)return 1;
+      return (a.done?1:0)-(b.done?1:0);
+    });
+
+  function openAdd(section) {
+    setEditTarget(null);
+    setForm({...emptyForm,section:section||'루틴'});
+    setShowAddModal(true);
+  }
+  function openEdit(item) {
+    setEditTarget(item);
+    setForm({text:item.text,emoji:item.emoji||'💧',section:item.section||'루틴',freq:item.freq||'interval',freqDays:item.freqDays||[],intervalDays:item.intervalDays||7,monthDay:item.monthDay||1,guide:item.guide||''});
+    setShowAddModal(true);
+  }
+  function submitForm() {
+    if(!form.text.trim()) return;
+    if(editTarget) onDelete(editTarget.id);
+    onAdd({id:Date.now(),...form,done:false,lastDone:null,createdAt:editTarget?.createdAt||new Date().toISOString()});
+    setShowAddModal(false);
+  }
+
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:18}}>
+        <div><div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:3}}>🌀 생활 관리</div><div style={{fontSize:13,color:'#9ca3af'}}>혼자 살면서 놓치기 쉬운 것들</div></div>
+        <div style={{display:'flex',gap:7}}>
+          <Btn variant="outline" size="sm" onClick={()=>setShowPackModal(true)}>✨ 추천</Btn>
+          <Btn size="sm" onClick={()=>openAdd(activeSection==='전체'?'루틴':activeSection)}>+ 추가</Btn>
+        </div>
+      </div>
+
+      {/* 달성률 */}
+      <div style={{background:'linear-gradient(135deg,'+theme.primary+','+theme.border+')',borderRadius:18,padding:'17px 20px',marginBottom:14,color:'#fff'}}>
+        <div style={{display:'flex',alignItems:'center',gap:18}}>
+          <CircleGauge pct={pct} size={78} color="#fff"/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,opacity:0.85,marginBottom:2}}>전체 달성률</div>
+            <div style={{fontSize:15,fontWeight:700,marginBottom:5}}>{done}/{total} 완료 {pct===100?'🎉':pct>=60?'💪':'🌱'}</div>
+            <div style={{height:6,background:'rgba(255,255,255,0.25)',borderRadius:8,overflow:'hidden'}}>
+              <div style={{width:`${pct}%`,height:'100%',background:'#fff',borderRadius:8,transition:'width 0.5s ease'}}/>
+            </div>
+          </div>
+          <div style={{textAlign:'center',flexShrink:0}}>
+            <div style={{fontSize:24,fontWeight:800}}>🔥{(streak||{count:0}).count}</div>
+            <div style={{fontSize:10,opacity:0.8}}>연속</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 이번 주 — 클릭하면 해당 날 루틴 보기 */}
+      <div style={{background:'#fff',borderRadius:14,padding:'13px 16px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#374151'}}>이번 주 달성 현황</div>
+          {selectedDayStr&&selectedDayStr!==getToday()&&(
+            <button onClick={()=>setSelectedDayStr(null)} style={{fontSize:11,color:'#9ca3af',background:'none',border:'none',cursor:'pointer',width:'auto',margin:0}}>오늘로 돌아가기</button>
+          )}
+        </div>
+        <div style={{display:'flex',gap:5}}>
+          {['일','월','화','수','목','금','토'].map((d,i)=>{
+            const dateObj=new Date(); dateObj.setDate(dateObj.getDate()-(new Date().getDay()-i));
+            const dateStr=dateObj.toISOString().split('T')[0];
+            const isToday=i===new Date().getDay();
+            const isSelected=selectedDayStr===dateStr||(selectedDayStr===null&&isToday);
+            const achieved=(weeklyLog||{})[dateStr]>=60;
+            return (
+              <button key={i} onClick={()=>setSelectedDayStr(isToday?null:dateStr)} style={{
+                flex:1,height:38,borderRadius:9,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                fontSize:11,fontWeight:700,gap:2,
+                background:isSelected?'#7c3aed':achieved?'#ede9fe':'#f9fafb',
+                color:isSelected?'#fff':achieved?'#7c3aed':'#9ca3af',
+                border:isSelected?'none':achieved?'1.5px solid #ddd6fe':'1px solid #f3f4f6',
+                cursor:'pointer',width:'auto',margin:0,transition:'all 0.15s',
+              }}>
+                {d}
+                {achieved&&!isSelected&&<div style={{width:4,height:4,borderRadius:'50%',background:'#7c3aed'}}/>}
+              </button>
+            );
+          })}
+        </div>
+        {/* 선택된 날짜의 루틴 미리보기 */}
+        {selectedDayStr&&selectedDayStr!==getToday()&&(
+          <div style={{marginTop:10,padding:'10px 12px',background:'#f9fafb',borderRadius:10,border:'1px solid #f3f4f6'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#374151',marginBottom:7}}>
+              📅 {selectedDayStr} 루틴
+              {(weeklyLog||{})[selectedDayStr]>=60&&<span style={{marginLeft:6,fontSize:10,color:'#7c3aed',background:'#ede9fe',padding:'1px 7px',borderRadius:20}}>✓ 달성</span>}
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:5}}>
+              {lifeItems.filter(c=>c.section==='루틴').slice(0,5).map(c=>(
+                <div key={c.id} style={{display:'flex',alignItems:'center',gap:7,fontSize:12,color:'#6b7280'}}>
+                  <span>{c.emoji||'💧'}</span>
+                  <span style={{flex:1}}>{c.text}</span>
+                  <span style={{fontSize:10,color:'#9ca3af'}}>{getRepeatLabel(c)}</span>
+                </div>
+              ))}
+              {lifeItems.filter(c=>c.section==='루틴').length===0&&(
+                <div style={{fontSize:12,color:'#9ca3af',textAlign:'center'}}>등록된 루틴이 없어요</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 섹션 탭 */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7,marginBottom:12}}>
+        <button onClick={()=>setActiveSection('전체')} style={{padding:'10px 5px',borderRadius:12,border:`1.5px solid ${activeSection==='전체'?theme.primary:'#e5e7eb'}`,background:activeSection==='전체'?theme.light:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center'}}>
+          <div style={{fontSize:14,marginBottom:2}}>📋</div>
+          <div style={{fontSize:11,fontWeight:700,color:activeSection==='전체'?theme.primary:'#374151'}}>전체</div>
+          <div style={{fontSize:10,color:'#9ca3af'}}>{done}/{total}</div>
+        </button>
+        {sectionStats.map(({s,done:d,total:t})=>{
+          const sec=LIFE_SECTIONS[s]; const isA=activeSection===s;
+          return <button key={s} onClick={()=>setActiveSection(s)} style={{padding:'10px 5px',borderRadius:12,border:`1.5px solid ${isA?sec.color:sec.border}`,background:isA?sec.bg:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center',transition:'all 0.15s'}}>
+            <div style={{fontSize:14,marginBottom:2}}>{sec.icon}</div>
+            <div style={{fontSize:10,fontWeight:700,color:isA?sec.color:'#374151',lineHeight:1.2}}>{sec.label}</div>
+            <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>{d}/{t}</div>
+          </button>;
+        })}
+      </div>
+
+      {/* 완료/미완료 필터 */}
+      <div style={{display:'flex',gap:6,marginBottom:12,justifyContent:'flex-end'}}>
+        {['전체','미완료','완료'].map(s=>(
+          <button key={s} onClick={()=>setFilterDone(s)} style={{padding:'5px 11px',borderRadius:20,border:`1.5px solid ${filterDone===s?theme.primary:'#e5e7eb'}`,background:filterDone===s?theme.light:'#fff',color:filterDone===s?theme.primary:'#6b7280',fontSize:12,fontWeight:filterDone===s?700:400,cursor:'pointer',width:'auto',margin:0}}>{s}</button>
+        ))}
+      </div>
+
+      {/* 아이템 목록 */}
+      <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:14}}>
+        {filtered.length===0?(
+          <div style={{background:'#fff',borderRadius:16,padding:'28px',textAlign:'center',color:'#9ca3af',fontSize:13,border:'1.5px solid #f3f4f6'}}><div style={{fontSize:30,marginBottom:7}}>✨</div>"추천" 버튼으로 쉽게 시작해보세요!</div>
+        ):filtered.map(c=>(
+          <LifeItemCard key={c.id} c={c} onToggle={onToggle} onDelete={onDelete} openEdit={openEdit} updateStreak={updateStreak} lifeItems={lifeItems}/>
+        ))}
+      </div>
+
+      {/* 추가 모달 */}
+      {showAddModal&&(
+        <Modal title={editTarget?'항목 수정':'+ 생활 관리 추가'} sub="루틴·생활·청소를 주기로 관리해요" onClose={()=>setShowAddModal(false)} maxWidth={440}>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            <div style={{display:'grid',gridTemplateColumns:'50px 1fr',gap:7}}>
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>이모지</div><input placeholder="💧" value={form.emoji} onChange={e=>setForm(p=>({...p,emoji:e.target.value}))} maxLength={2} style={inp({textAlign:'center',fontSize:20})}/></div>
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>내용 *</div><input placeholder="예: 빨래 돌리기" value={form.text} onChange={e=>setForm(p=>({...p,text:e.target.value}))} style={inp()} autoFocus/></div>
+            </div>
+            <div>
+              <div style={{fontSize:11,color:'#9ca3af',marginBottom:5}}>종류</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+                {Object.entries(LIFE_SECTIONS).map(([s,sec])=>(
+                  <button key={s} onClick={()=>setForm(p=>({...p,section:s,freq:s==='루틴'?'daily':'interval'}))} style={{padding:'10px 5px',borderRadius:11,border:`1.5px solid ${form.section===s?sec.color:sec.border}`,background:form.section===s?sec.bg:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center'}}>
+                    <div style={{fontSize:16,marginBottom:2}}>{sec.icon}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:form.section===s?sec.color:'#374151'}}>{sec.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{background:'#f9fafb',borderRadius:12,padding:'13px',border:'1px solid #f3f4f6'}}>
+              {form.section==='루틴'?(
+                <RepeatPicker form={form} setForm={setForm}/>
+              ):(
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  <div style={{fontSize:11,color:'#9ca3af',fontWeight:600}}>반복 주기</div>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:12,color:'#9ca3af',whiteSpace:'nowrap'}}>매</span>
+                    <input type="number" min={1} max={365} value={form.intervalDays||7} onChange={e=>setForm(p=>({...p,intervalDays:Number(e.target.value)}))} style={inp({width:80,textAlign:'center'})}/>
+                    <span style={{fontSize:12,color:'#9ca3af',whiteSpace:'nowrap'}}>일마다</span>
+                  </div>
+                  <div style={{fontSize:11,color:'#7c3aed',background:'#f5f3ff',padding:'6px 10px',borderRadius:8,fontWeight:600}}>⏱ {form.intervalDays||7}일마다 한 번</div>
+                </div>
+              )}
+            </div>
+            {(form.section==='청소'||form.section==='생활')&&(
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>메모 (선택)</div>
+                <textarea placeholder="나중에 볼 수 있는 메모" value={form.guide||''} onChange={e=>setForm(p=>({...p,guide:e.target.value}))} rows={2} style={inp({resize:'none',lineHeight:1.5})}/>
+              </div>
+            )}
+            <div style={{display:'flex',gap:8,marginTop:2}}>
+              <Btn onClick={submitForm} style={{flex:1}}>{editTarget?'수정하기':'추가하기'}</Btn>
+              <Btn onClick={()=>setShowAddModal(false)} variant="outline" style={{flex:1}}>취소</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 추천 팩 모달 */}
+      {showPackModal&&(
+        <Modal title="✨ 추천 생활 관리" sub="자취 생활에 맞는 항목을 추가해보세요" onClose={()=>setShowPackModal(false)} maxWidth={440}>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {Object.entries(ONBOARDING_PRESETS).map(([label,items])=>(
+              <div key={label} style={{background:'#f9fafb',borderRadius:14,padding:'14px 16px',border:'1.5px solid #f3f4f6'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                  <div style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>{label}</div>
+                  <Btn size="sm" onClick={()=>{items.forEach(item=>{if(!lifeItems.some(c=>c.text===item.text))onAdd({id:Date.now()+Math.random(),...item,done:false,lastDone:null,freqDays:[],createdAt:new Date().toISOString()});});setShowPackModal(false);}}>전체 추가</Btn>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                  {items.map((item,idx)=>{
+                    const already=lifeItems.some(c=>c.text===item.text);
+                    const sec=LIFE_SECTIONS[item.section];
+                    return <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:9,background:'#fff',border:'1px solid #e5e7eb'}}>
+                      <span style={{fontSize:15}}>{item.emoji}</span>
+                      <span style={{flex:1,fontSize:13,color:'#374151'}}>{item.text}</span>
+                      <span style={{fontSize:10,color:sec.color,background:sec.bg,padding:'1px 6px',borderRadius:20,border:`1px solid ${sec.border}`,fontWeight:600}}>{sec.icon} {item.section}</span>
+                      <span style={{fontSize:10,color:'#9ca3af'}}>{item.freq==='daily'?'매일':item.intervalDays?`${item.intervalDays}일`:'매주'}</span>
+                      {already?<span style={{fontSize:11,color:'#16a34a',fontWeight:700}}>✓</span>:<button onClick={()=>onAdd({id:Date.now(),...item,done:false,lastDone:null,freqDays:[],createdAt:new Date().toISOString()})} style={{padding:'3px 8px',borderRadius:8,border:'1px solid #e5e7eb',background:'#fff',color:'#7c3aed',fontSize:11,fontWeight:700,cursor:'pointer',width:'auto',margin:0}}>추가</button>}
+                    </div>;
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TIPS PAGE
+// ============================================================
+function TipsPage() {
+  const theme=useTheme();
+  const [activeCat,setActiveCat]=React.useState('전체');
+  const [search,setSearch]=React.useState('');
+  const [openId,setOpenId]=React.useState(null);
+  const [showModal,setShowModal]=React.useState(false);
+  const [editTarget,setEditTarget]=React.useState(null);
+  const [myTips,setMyTips]=useLocalStorage('mylife_v3_mytips',[]);
+  const [form,setForm]=React.useState({emoji:'✏️',title:'',category:'나만의팁',summary:'',content:'',time:''});
+  const ALL=['전체','청소','세탁','식재료','자취팁','나만의팁'];
+  const allGuides=[...LIFE_GUIDES,...myTips.map((t,i)=>({...t,...MY_TIP_COLORS[i%MY_TIP_COLORS.length],isMine:true}))];
+  const filtered=allGuides.filter(g=>{
+    const matchCat=activeCat==='전체'||g.category===activeCat;
+    const q=search.trim().toLowerCase();
+    const matchSearch=!q||(g.title+g.summary+g.content+g.category).toLowerCase().includes(q);
+    return matchCat&&matchSearch;
+  });
+  function openAdd(){setEditTarget(null);setForm({emoji:'✏️',title:'',category:'나만의팁',summary:'',content:'',time:''});setShowModal(true);}
+  function openEdit(g,e){e.stopPropagation();setEditTarget(g);setForm({emoji:g.emoji,title:g.title,category:g.category,summary:g.summary||'',content:g.content||'',time:g.time||''});setShowModal(true);}
+  function submitForm(){if(!form.title.trim())return;editTarget?setMyTips(p=>p.map(t=>t.id===editTarget.id?{...t,...form}:t)):setMyTips(p=>[...p,{id:Date.now(),...form}]);setShowModal(false);}
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16}}>
+        <div><div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:3}}>💡 생활 가이드</div><div style={{fontSize:13,color:'#9ca3af'}}>자취 초보를 위한 생활 꿀팁</div></div>
+        <Btn size="sm" onClick={openAdd}>+ 나만의 팁</Btn>
+      </div>
+      <div style={{position:'relative',marginBottom:12}}>
+        <span style={{position:'absolute',left:13,top:'50%',transform:'translateY(-50%)',fontSize:14,color:'#9ca3af',pointerEvents:'none'}}>🔍</span>
+        <input type="text" placeholder="팁 검색..." value={search} onChange={e=>setSearch(e.target.value)} style={inp({paddingLeft:38,borderRadius:14,background:'#fff'})}
+          onFocus={e=>e.target.style.borderColor='#7c3aed'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+        {search&&<button onClick={()=>setSearch('')} style={{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:15,padding:0,width:'auto',margin:0}}>✕</button>}
+      </div>
+      <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
+        {ALL.map(c=><button key={c} onClick={()=>setActiveCat(c)} style={{padding:'5px 13px',borderRadius:20,border:`1.5px solid ${activeCat===c?'#7c3aed':'#e5e7eb'}`,background:activeCat===c?'#ede9fe':'#fff',color:activeCat===c?'#7c3aed':'#6b7280',fontSize:12,fontWeight:activeCat===c?700:500,cursor:'pointer',width:'auto',margin:0,display:'flex',alignItems:'center',gap:4}}>
+          {c}{c==='나만의팁'&&myTips.length>0&&<span style={{fontSize:10,fontWeight:700,color:'#fff',background:'#7c3aed',padding:'0 5px',borderRadius:10}}>{myTips.length}</span>}
+        </button>)}
+      </div>
+      {filtered.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:'#9ca3af'}}><div style={{fontSize:32,marginBottom:8}}>{search?'🔍':'📭'}</div><div style={{fontSize:14,fontWeight:600}}>{search?`"${search}" 결과가 없어요`:'팁이 없어요'}</div></div>}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:13}}>
+        {filtered.map(g=>(
+          <div key={g.id} style={{background:g.color,borderRadius:18,padding:'19px',border:`1.5px solid ${g.isMine?'#ddd6fe':`${g.textColor}22`}`,cursor:'pointer',transition:'transform 0.15s',position:'relative'}} onClick={()=>setOpenId(openId===g.id?null:g.id)} onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+            {g.isMine&&(
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
+                <span style={{fontSize:10,fontWeight:700,color:'#7c3aed',background:'#ede9fe',padding:'2px 7px',borderRadius:20,border:'1px solid #ddd6fe'}}>✏️ 나만의 팁</span>
+                <div style={{display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
+                  <button onClick={e=>openEdit(g,e)} style={{fontSize:10,color:'#7c3aed',background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:7,padding:'2px 7px',cursor:'pointer',width:'auto',margin:0}}>수정</button>
+                  <button onClick={e=>{e.stopPropagation();setMyTips(p=>p.filter(t=>t.id!==g.id));}} style={{fontSize:10,color:'#ef4444',background:'#fef2f2',border:'1px solid #fecaca',borderRadius:7,padding:'2px 7px',cursor:'pointer',width:'auto',margin:0}}>삭제</button>
+                </div>
+              </div>
+            )}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:7}}>
+              <div style={{fontSize:26}}>{g.emoji}</div>
+              {!g.isMine&&<div style={{fontSize:10,fontWeight:700,color:g.textColor,opacity:0.7,background:`${g.textColor}15`,padding:'2px 8px',borderRadius:20}}>{g.category}</div>}
+            </div>
+            <div style={{fontSize:14,fontWeight:800,color:g.textColor,marginBottom:3}}>{g.title}</div>
+            {g.summary&&<div style={{fontSize:12,color:g.textColor,opacity:0.75,marginBottom:9}}>{g.summary}</div>}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              {g.time?<div style={{fontSize:10,color:g.textColor,opacity:0.6}}>🕐 {g.time}</div>:<div/>}
+              <div style={{fontSize:10,color:g.textColor,fontWeight:700}}>{openId===g.id?'접기 ↑':'더보기 ↓'}</div>
+            </div>
+            {openId===g.id&&g.content&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${g.textColor}22`,fontSize:12,color:g.textColor,lineHeight:1.8,whiteSpace:'pre-wrap'}}>{g.content}</div>}
+          </div>
+        ))}
+      </div>
+      {showModal&&(
+        <Modal title={editTarget?'팁 수정':'✏️ 나만의 팁 추가'} sub="나만의 생활 노하우를 기록해보세요" onClose={()=>setShowModal(false)} maxWidth={420}>
+          <div style={{display:'flex',flexDirection:'column',gap:11}}>
+            <div style={{display:'grid',gridTemplateColumns:'54px 1fr',gap:7}}>
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>이모지</div><input placeholder="✏️" value={form.emoji} onChange={e=>setForm(p=>({...p,emoji:e.target.value}))} maxLength={2} style={inp({textAlign:'center',fontSize:22})}/></div>
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>제목 *</div><input placeholder="팁 제목" value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} style={inp()} autoFocus/></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}}>
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>카테고리</div>
+                <select value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))} style={inp()}>
+                  {['나만의팁','청소','세탁','식재료','자취팁'].map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>주기</div><input placeholder="예: 주 1회" value={form.time} onChange={e=>setForm(p=>({...p,time:e.target.value}))} style={inp()}/></div>
+            </div>
+            <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>한 줄 요약</div><input placeholder="짧게 요약해주세요" value={form.summary} onChange={e=>setForm(p=>({...p,summary:e.target.value}))} style={inp()}/></div>
+            <div><div style={{fontSize:11,color:'#9ca3af',marginBottom:3}}>내용</div><textarea placeholder="자유롭게 작성하세요" value={form.content} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={4} style={inp({resize:'vertical',lineHeight:1.6})}/></div>
+            <div style={{display:'flex',gap:8,marginTop:2}}>
+              <Btn onClick={submitForm} style={{flex:1}}>{editTarget?'수정하기':'추가하기'}</Btn>
+              <Btn onClick={()=>setShowModal(false)} variant="outline" style={{flex:1}}>취소</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// FIREBASE HOOKS
+// ============================================================
+function useFirebase() {
+  const [fb, setFb] = React.useState(window._firebase || null);
+  React.useEffect(() => {
+    if(window._firebaseReady) { setFb(window._firebase); return; }
+    const handler = () => setFb(window._firebase);
+    window.addEventListener('firebaseReady', handler);
+    return () => window.removeEventListener('firebaseReady', handler);
+  }, []);
+  return fb;
+}
+
+// ============================================================
+// AUTH SCREENS
+// ============================================================
+function WelcomeScreen({onStart, onLogin}) {
+  return (
+    <div className="fade-in" style={{minHeight:'100vh',background:'linear-gradient(160deg,#f5f3ff 0%,#ede9fe 50%,#ddd6fe 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{textAlign:'center',maxWidth:380,width:'100%'}}>
+        <div style={{fontSize:64,marginBottom:16,filter:'drop-shadow(0 4px 12px rgba(124,58,237,0.3))'}}>🏠</div>
+        <h1 style={{fontSize:32,fontWeight:900,color:'#7c3aed',marginBottom:8,letterSpacing:'-1px'}}>mylife.</h1>
+        <p style={{fontSize:16,color:'#6d28d9',marginBottom:6,fontWeight:600}}>혼자 사는 생활, 조금 더 쉽게.</p>
+        <p style={{fontSize:14,color:'#a78bfa',marginBottom:40,lineHeight:1.6}}>식재료 · 생활 루틴 · 청소 주기<br/>모두 한 곳에서 관리해요</p>
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          <button onClick={onStart} style={{width:'100%',padding:'16px',borderRadius:18,border:'none',background:'#7c3aed',color:'#fff',fontSize:16,fontWeight:700,cursor:'pointer',boxShadow:'0 8px 24px rgba(124,58,237,0.35)'}}>
+            시작하기 →
+          </button>
+          <button onClick={onLogin} style={{width:'100%',padding:'15px',borderRadius:18,border:'2px solid #ddd6fe',background:'#fff',color:'#7c3aed',fontSize:15,fontWeight:600,cursor:'pointer'}}>
+            이미 계정이 있어요
+          </button>
+        </div>
+        <p style={{fontSize:12,color:'#c4b5fd',marginTop:24}}>로그인하면 모든 기기에서 동기화돼요 ✨</p>
+      </div>
+    </div>
+  );
+}
+
+function AuthScreen({mode, onSuccess, onBack}) {
+  const fb = useFirebase();
+  const [isLogin, setIsLogin] = React.useState(mode === 'login');
+  const [email, setEmail] = React.useState('');
+  const [pw, setPw] = React.useState('');
+  const [name, setName] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  async function handleEmail(e) {
+    e.preventDefault();
+    if(!fb) return;
+    setLoading(true); setError('');
+    try {
+      let cred;
+      if(isLogin) {
+        cred = await fb.signInWithEmailAndPassword(fb.auth, email, pw);
+      } else {
+        cred = await fb.createUserWithEmailAndPassword(fb.auth, email, pw);
+        if(name.trim()) await fb.updateProfile(cred.user, {displayName: name.trim()});
+      }
+      onSuccess(cred.user);
+    } catch(err) {
+      const msgs = {
+        'auth/user-not-found':'등록된 이메일이 없어요',
+        'auth/wrong-password':'비밀번호가 틀렸어요',
+        'auth/email-already-in-use':'이미 사용 중인 이메일이에요',
+        'auth/weak-password':'비밀번호는 6자 이상이어야 해요',
+        'auth/invalid-email':'이메일 형식이 올바르지 않아요',
+        'auth/invalid-credential':'이메일 또는 비밀번호가 틀렸어요',
+      };
+      setError(msgs[err.code] || '오류가 발생했어요. 다시 시도해주세요.');
+    }
+    setLoading(false);
+  }
+
+  async function handleGoogle() {
+    if(!fb) return;
+    setLoading(true); setError('');
+    try {
+      const cred = await fb.signInWithPopup(fb.auth, fb.googleProvider);
+      onSuccess(cred.user);
+    } catch(err) {
+      setError('구글 로그인에 실패했어요.');
+    }
+    setLoading(false);
+  }
+
+  const inputStyle = {width:'100%',padding:'13px 16px',border:'1.5px solid #e5e7eb',borderRadius:14,fontSize:14,outline:'none',background:'#fafafa',boxSizing:'border-box',transition:'border-color 0.15s'};
+
+  return (
+    <div className="fade-in" style={{minHeight:'100vh',background:'linear-gradient(160deg,#f5f3ff,#ede9fe)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{background:'#fff',borderRadius:28,padding:'32px 28px',width:'100%',maxWidth:380,boxShadow:'0 24px 64px rgba(124,58,237,0.15)'}}>
+        <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:13,padding:0,marginBottom:20,display:'flex',alignItems:'center',gap:5,width:'auto'}}>
+          ← 뒤로
+        </button>
+        <div style={{fontSize:26,marginBottom:6}}>🏠</div>
+        <div style={{fontSize:20,fontWeight:800,color:'#1f2937',marginBottom:4}}>
+          {isLogin ? '다시 만나서 반가워요!' : '함께 시작해요!'}
+        </div>
+        <div style={{fontSize:13,color:'#9ca3af',marginBottom:24}}>
+          {isLogin ? '로그인하고 생활 관리를 계속해요' : '무료로 시작하고 모든 기기에서 동기화해요'}
+        </div>
+
+        {/* 구글 로그인 */}
+        <button onClick={handleGoogle} disabled={loading} style={{width:'100%',padding:'13px',borderRadius:14,border:'1.5px solid #e5e7eb',background:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:16,color:'#374151'}}>
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.6 2.5 30.1 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.8 6c1.8-5.4 6.8-9.8 13.6-9.8z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.4 28.7A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.1 0 11.2-2 14.9-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.4 2.2-6.7 0-12.4-4.5-14.4-10.6l-7.8 6C6.5 42.5 14.6 48 24 48z"/></svg>
+          Google로 {isLogin?'로그인':'시작하기'}
+        </button>
+
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+          <div style={{flex:1,height:1,background:'#f3f4f6'}}/>
+          <span style={{fontSize:12,color:'#9ca3af'}}>또는</span>
+          <div style={{flex:1,height:1,background:'#f3f4f6'}}/>
+        </div>
+
+        <form onSubmit={handleEmail} style={{display:'flex',flexDirection:'column',gap:10}}>
+          {!isLogin&&(
+            <input placeholder="이름 (닉네임 가능)" value={name} onChange={e=>setName(e.target.value)} style={inputStyle}
+              onFocus={e=>e.target.style.borderColor='#7c3aed'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          )}
+          <input type="email" placeholder="이메일" value={email} onChange={e=>setEmail(e.target.value)} required style={inputStyle}
+            onFocus={e=>e.target.style.borderColor='#7c3aed'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          <input type="password" placeholder="비밀번호 (6자 이상)" value={pw} onChange={e=>setPw(e.target.value)} required style={inputStyle}
+            onFocus={e=>e.target.style.borderColor='#7c3aed'} onBlur={e=>e.target.style.borderColor='#e5e7eb'}/>
+          {error&&<div style={{fontSize:12,color:'#ef4444',background:'#fef2f2',padding:'9px 12px',borderRadius:10,border:'1px solid #fecaca'}}>{error}</div>}
+          <button type="submit" disabled={loading} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:loading?'#a78bfa':'#7c3aed',color:'#fff',fontSize:15,fontWeight:700,cursor:loading?'default':'pointer',marginTop:4}}>
+            {loading?'처리 중...': isLogin?'로그인':'가입하기'}
+          </button>
+        </form>
+
+        <button onClick={()=>{setIsLogin(!isLogin);setError('');}} style={{width:'100%',marginTop:14,padding:'10px',borderRadius:12,border:'none',background:'transparent',color:'#7c3aed',fontSize:13,cursor:'pointer',fontWeight:600}}>
+          {isLogin?'계정이 없어요 → 회원가입':'이미 계정이 있어요 → 로그인'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// HUB PAGE — 추천 허브
+// ============================================================
+const HUB_APPS = [
+  {id:1, emoji:'🏠', name:'오늘의집', cat:'인테리어', desc:'자취방 꾸미기 아이디어 & 가구 쇼핑', tag:['인테리어','홈데코'], url:'https://ohou.se'},
+  {id:2, emoji:'🥕', name:'당근마켓', cat:'중고거래', desc:'동네에서 저렴하게 생활용품 구하기', tag:['절약','중고'], url:'https://www.daangn.com'},
+  {id:3, emoji:'🍳', name:'만개의레시피', cat:'요리', desc:'냉장고 재료로 만드는 간단 레시피', tag:['요리','식재료'], url:'https://www.10000recipe.com'},
+  {id:4, emoji:'📦', name:'번개장터', cat:'중고거래', desc:'전자기기·가전 중고 거래', tag:['절약','중고'], url:'https://m.bunjang.co.kr'},
+  {id:5, emoji:'🌿', name:'Forest', cat:'집중', desc:'공부할 때 폰 내려놓게 도와주는 앱', tag:['공부','집중'], url:'https://www.forestapp.cc'},
+  {id:6, emoji:'💰', name:'뱅크샐러드', cat:'가계부', desc:'지출 자동 분석 & 절약 추천', tag:['가계부','절약'], url:'https://banksalad.com'},
+  {id:7, emoji:'🚚', name:'배달의민족', cat:'배달', desc:'자취생 필수 배달 앱', tag:['배달','음식'], url:'https://www.baemin.com'},
+  {id:8, emoji:'💊', name:'필라이즈', cat:'건강', desc:'나에게 맞는 영양제 추천', tag:['건강','영양제'], url:'https://pillize.co.kr'},
+  {id:9, emoji:'📚', name:'밀리의서재', cat:'독서', desc:'월정액 전자책 & 오디오북', tag:['독서','공부'], url:'https://www.millie.co.kr'},
+  {id:10,emoji:'🧹', name:'청소연구소', cat:'청소', desc:'전문 청소 서비스 예약', tag:['청소','생활'], url:'https://www.cleaninglab.co.kr'},
+];
+
+const HUB_SITES = [
+  {id:1, emoji:'🗑️', name:'내손안의 분리배출', cat:'분리수거', desc:'품목별 올바른 분리배출 방법 검색', tag:['분리수거','환경'], url:'https://www.recycleinfo.or.kr'},
+  {id:2, emoji:'🍱', name:'식품안전나라', cat:'식재료', desc:'식품 유통기한 & 안전 정보', tag:['식재료','안전'], url:'https://www.foodsafetykorea.go.kr'},
+  {id:3, emoji:'⚡', name:'한국전력 요금계산기', cat:'공과금', desc:'전기요금 미리 계산하기', tag:['절약','공과금'], url:'https://cyber.kepco.co.kr'},
+  {id:4, emoji:'🏥', name:'공공의료포털', cat:'건강', desc:'가까운 병원·약국 찾기', tag:['건강','병원'], url:'https://www.e-gen.or.kr'},
+  {id:5, emoji:'🌦️', name:'기상청 날씨', cat:'생활', desc:'오늘 날씨 확인 & 빨래 타이밍 파악', tag:['날씨','생활'], url:'https://www.weather.go.kr'},
+  {id:6, emoji:'🚌', name:'카카오맵', cat:'교통', desc:'대중교통 · 자전거 길찾기', tag:['교통','생활'], url:'https://map.kakao.com'},
+];
+
+const HUB_COMMUNITIES = [
+  {id:1, emoji:'🏫', name:'에브리타임 자취방', cat:'커뮤니티', desc:'대학생 자취 정보 공유 커뮤니티', tag:['자취초보','대학생'], url:'https://everytime.kr'},
+  {id:2, emoji:'🏘️', name:'자취생 커뮤니티', cat:'커뮤니티', desc:'자취 꿀팁·생활용품 후기 공유', tag:['자취팁','생활'], url:'https://cafe.naver.com/1004living'},
+  {id:3, emoji:'🛒', name:'알뜰살뜰', cat:'절약', desc:'생활비 절약 정보 & 공동구매', tag:['절약','공동구매'], url:'https://cafe.naver.com/moneyplan'},
+  {id:4, emoji:'🍳', name:'자취생 레시피', cat:'요리', desc:'간단한 혼밥 레시피 모음', tag:['요리','혼밥'], url:'https://cafe.naver.com/jacheesik'},
+];
+
+// 상황별 추천 로직
+function getSituationalRecs(foods, lifeItems) {
+  const recs = [];
+  const urgentFoods = foods.filter(f=>calcDaysLeft(f.expiryDate)<=3 && calcDaysLeft(f.expiryDate)>=0);
+  const overdueCleaning = lifeItems.filter(c=>c.section==='청소'&&c.lastDone&&daysSince(c.lastDone)>=c.intervalDays);
+  const overdueLaundry = lifeItems.find(c=>c.text.includes('빨래')&&c.lastDone&&daysSince(c.lastDone)>=5);
+  const lowRoutine = lifeItems.filter(c=>c.section==='루틴'&&!c.done).length > lifeItems.filter(c=>c.section==='루틴').length * 0.6;
+
+  if(urgentFoods.length >= 2) recs.push({emoji:'🍳', title:'재료가 남아있어요!', desc:`${urgentFoods[0]?.name} 등 ${urgentFoods.length}개 재료로 요리해봐요`, appId:3, type:'app'});
+  if(overdueLaundry) recs.push({emoji:'🧺', title:'빨래 미룬 지 좀 됐어요', desc:'세탁 팁과 냄새 제거법을 확인해봐요', siteId:1, type:'tip', tipId:'laundry'});
+  if(overdueCleaning.length >= 2) recs.push({emoji:'🧹', title:'청소 주기가 지났어요', desc:'5분 청소법으로 빠르게 정리해봐요', appId:10, type:'app'});
+  if(lowRoutine) recs.push({emoji:'🌿', title:'루틴을 조금 놓쳤어요', desc:'집중력 회복에 Forest 앱을 써봐요', appId:5, type:'app'});
+  if(recs.length === 0) recs.push({emoji:'✨', title:'생활 잘 유지하고 있어요!', desc:'오늘도 좋은 하루 보내세요 💜', type:'cheer'});
+  return recs;
+}
+
+function HubPage({foods, lifeItems, onNav}) {
+  const theme=useTheme();
+  const [activeTab, setActiveTab] = React.useState('situation');
+  const [activeCat, setActiveCat] = React.useState('전체');
+  const tabs = [
+    {id:'situation', label:'🎯 상황별 추천'},
+    {id:'apps',      label:'📱 앱 추천'},
+    {id:'sites',     label:'🌐 웹사이트'},
+    {id:'community', label:'💬 커뮤니티'},
+  ];
+  const situRecs = getSituationalRecs(foods, lifeItems);
+  const allAppCats = ['전체', ...new Set(HUB_APPS.map(a=>a.cat))];
+  const filteredApps = activeCat==='전체' ? HUB_APPS : HUB_APPS.filter(a=>a.cat===activeCat);
+
+  function LinkCard({item}) {
+    return (
+      <div style={{background:'#fff',borderRadius:16,padding:'16px 18px',border:'1.5px solid #f3f4f6',display:'flex',alignItems:'flex-start',gap:14,transition:'transform 0.15s'}}
+        onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'}
+        onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+        <div style={{width:44,height:44,borderRadius:12,background:'#f5f3ff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>{item.emoji}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
+            <span style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>{item.name}</span>
+            <span style={{fontSize:10,color:'#7c3aed',background:'#ede9fe',padding:'1px 7px',borderRadius:20,fontWeight:600}}>{item.cat}</span>
+          </div>
+          <div style={{fontSize:12,color:'#6b7280',marginBottom:8,lineHeight:1.5}}>{item.desc}</div>
+          <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+            {item.tag.map(t=><span key={t} style={{fontSize:10,color:'#9ca3af',background:'#f9fafb',padding:'2px 7px',borderRadius:20,border:'1px solid #f3f4f6'}}>#{t}</span>)}
+          </div>
+        </div>
+        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{flexShrink:0,padding:'7px 12px',borderRadius:10,background:'#7c3aed',color:'#fff',fontSize:11,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap'}}>바로가기</a>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:3}}>🔖 추천 허브</div>
+        <div style={{fontSize:13,color:'#9ca3af'}}>자취 생활에 필요한 것들을 모았어요</div>
+      </div>
+
+      {/* 탭 */}
+      <div style={{display:'flex',gap:6,marginBottom:18,overflowX:'auto',paddingBottom:2}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{
+            padding:'8px 14px',borderRadius:20,border:'none',whiteSpace:'nowrap',
+            background:activeTab===t.id?theme.primary:'#f3f4f6',
+            color:activeTab===t.id?'#fff':'#6b7280',
+            fontSize:13,fontWeight:activeTab===t.id?700:500,cursor:'pointer',width:'auto',margin:0,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* 상황별 추천 */}
+      {activeTab==='situation'&&(
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:12}}>지금 필요한 추천이에요</div>
+          <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:20}}>
+            {situRecs.map((r,i)=>(
+              <div key={i} style={{background:'#fff',borderRadius:16,padding:'16px 18px',border:'1.5px solid #f3f4f6',display:'flex',alignItems:'center',gap:14}}>
+                <span style={{fontSize:28,flexShrink:0}}>{r.emoji}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:'#1f2937',marginBottom:3}}>{r.title}</div>
+                  <div style={{fontSize:12,color:'#6b7280'}}>{r.desc}</div>
+                </div>
+                {r.type==='app'&&r.appId&&(()=>{
+                  const app=HUB_APPS.find(a=>a.id===r.appId);
+                  return app?<a href={app.url} target="_blank" rel="noopener noreferrer" style={{flexShrink:0,padding:'7px 12px',borderRadius:10,background:'#7c3aed',color:'#fff',fontSize:11,fontWeight:700,textDecoration:'none'}}>보러가기</a>:null;
+                })()}
+              </div>
+            ))}
+          </div>
+
+          {/* 전체 앱 빠른 보기 */}
+          <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:10}}>인기 추천 앱</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:9}}>
+            {HUB_APPS.slice(0,6).map(a=>(
+              <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" style={{background:'#fff',borderRadius:14,padding:'14px 12px',border:'1.5px solid #f3f4f6',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textDecoration:'none',textAlign:'center',transition:'transform 0.15s'}}
+                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'}
+                onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+                <div style={{fontSize:28}}>{a.emoji}</div>
+                <div style={{fontSize:12,fontWeight:700,color:'#1f2937'}}>{a.name}</div>
+                <div style={{fontSize:10,color:'#9ca3af',lineHeight:1.4}}>{a.desc.slice(0,18)}...</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 앱 추천 */}
+      {activeTab==='apps'&&(
+        <div>
+          <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+            {allAppCats.map(c=><button key={c} onClick={()=>setActiveCat(c)} style={{padding:'5px 12px',borderRadius:20,border:'none',background:activeCat===c?theme.primary:'#f3f4f6',color:activeCat===c?'#fff':'#6b7280',fontSize:12,fontWeight:activeCat===c?700:500,cursor:'pointer',width:'auto',margin:0}}>{c}</button>)}
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {filteredApps.map(a=><LinkCard key={a.id} item={a}/>)}
+          </div>
+        </div>
+      )}
+
+      {/* 웹사이트 */}
+      {activeTab==='sites'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {HUB_SITES.map(s=><LinkCard key={s.id} item={s}/>)}
+        </div>
+      )}
+
+      {/* 커뮤니티 */}
+      {activeTab==='community'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {HUB_COMMUNITIES.map(c=><LinkCard key={c.id} item={c}/>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// SETTINGS PAGE
+// ============================================================
+function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, themeId, setThemeId}) {
+  const theme=useTheme();
+  const [editName, setEditName] = React.useState(userName);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  async function saveProfile() {
+    if(!fb||!user) return;
+    setSaving(true);
+    try {
+      await fb.updateDoc(fb.doc(fb.db,'users',user.uid), {
+        name: editName.trim(),
+        animal,
+        themeId,
+      });
+      if(editName.trim()) await fb.updateProfile(user, {displayName: editName.trim()});
+      setUserName(editName.trim());
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 2000);
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  }
+
+  const sectionTitle = (t) => (
+    <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:10,marginTop:4}}>{t}</div>
+  );
+
+  return (
+    <div>
+      <div style={{marginBottom:22}}>
+        <div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:3}}>⚙️ 설정</div>
+        <div style={{fontSize:13,color:'#9ca3af'}}>프로필과 앱 스타일을 바꿔요</div>
+      </div>
+
+      {/* 프로필 카드 */}
+      <div style={{background:'linear-gradient('+theme.grad+')',borderRadius:20,padding:'20px 22px',marginBottom:20,border:'1.5px solid '+theme.mid}}>
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <div style={{fontSize:44}}>{animal}</div>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:theme.primary}}>{editName||userName||'이름 없음'}님</div>
+            <div style={{fontSize:12,color:user?.email||'#9ca3af',marginTop:2}}>{user?.email||''}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 이름 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        {sectionTitle('👤 이름')}
+        <input
+          value={editName}
+          onChange={e=>setEditName(e.target.value)}
+          placeholder="이름 또는 닉네임"
+          style={{width:'100%',padding:'11px 14px',border:`1.5px solid ${theme.mid}`,borderRadius:12,fontSize:14,outline:'none',background:'#fafafa',boxSizing:'border-box'}}
+          onFocus={e=>e.target.style.borderColor=theme.primary}
+          onBlur={e=>e.target.style.borderColor=theme.mid}
+        />
+      </div>
+
+      {/* 캐릭터 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        {sectionTitle('🐾 나의 캐릭터')}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:7}}>
+          {ANIMALS.map(a=>(
+            <button key={a} onClick={()=>setAnimal(a)} style={{
+              aspectRatio:'1',borderRadius:11,fontSize:20,width:'100%',
+              border:`2px solid ${animal===a?theme.primary:'#f3f4f6'}`,
+              background:animal===a?theme.light:'#fff',
+              cursor:'pointer',margin:0,display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s',
+            }}>{a}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 테마 색상 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        {sectionTitle('🎨 메인 색상')}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
+          {THEMES.map(t=>(
+            <button key={t.id} onClick={()=>setThemeId(t.id)} style={{
+              aspectRatio:'1',borderRadius:14,border:`3px solid ${themeId===t.id?t.primary:'transparent'}`,
+              background:t.primary,cursor:'pointer',margin:0,
+              boxShadow:themeId===t.id?`0 0 0 2px #fff, 0 0 0 4px ${t.primary}`:'none',
+              transition:'all 0.15s',position:'relative',
+            }}>
+              {themeId===t.id&&<span style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:'#fff',fontWeight:800}}>✓</span>}
+            </button>
+          ))}
+        </div>
+        <div style={{display:'flex',gap:6,marginTop:9}}>
+          {THEMES.map(t=>(
+            <div key={t.id} style={{flex:1,textAlign:'center',fontSize:10,color:themeId===t.id?t.primary:'#9ca3af',fontWeight:themeId===t.id?700:400}}>{t.name}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* 계정 정보 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        {sectionTitle('🔐 계정 정보')}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid #f9fafb'}}>
+          <div style={{fontSize:13,color:'#6b7280'}}>이메일</div>
+          <div style={{fontSize:13,fontWeight:600,color:'#1f2937'}}>{user?.email||'-'}</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0'}}>
+          <div style={{fontSize:13,color:'#6b7280'}}>가입 방법</div>
+          <div style={{fontSize:13,fontWeight:600,color:'#1f2937'}}>
+            {user?.providerData?.[0]?.providerId==='google.com'?'구글 로그인':'이메일'}
+          </div>
+        </div>
+      </div>
+
+      {/* 앱 정보 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:20}}>
+        {sectionTitle('ℹ️ 앱 정보')}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0'}}>
+          <div style={{fontSize:13,color:'#6b7280'}}>버전</div>
+          <div style={{fontSize:13,color:'#9ca3af'}}>v3.0.0</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0'}}>
+          <div style={{fontSize:13,color:'#6b7280'}}>앱 이름</div>
+          <div style={{fontSize:13,fontWeight:700,color:'#7c3aed'}}>mylife.</div>
+        </div>
+      </div>
+
+      {/* 저장 버튼 */}
+      <button onClick={saveProfile} disabled={saving} style={{
+        width:'100%',padding:'15px',borderRadius:16,border:'none',
+        background:saved?'#16a34a':saving?theme.mid:theme.primary,
+        color:'#fff',fontSize:15,fontWeight:700,cursor:saving?'default':'pointer',
+        transition:'all 0.3s',marginBottom:10,
+      }}>
+        {saved?'✓ 저장됐어요!':saving?'저장 중...':'변경사항 저장'}
+      </button>
+    </div>
+  );
+}
+
+
+// ============================================================
+// ONBOARDING
+// ============================================================
+function Onboarding({userName, onComplete}) {
+  const [step, setStep] = React.useState(0);
+  const [lifeChoice, setLifeChoice] = React.useState(null);
+  const [selectedAnimal, setSelectedAnimal] = React.useState('🐻');
+  const [selectedTheme, setSelectedTheme] = React.useState('purple');
+
+  const TOTAL_STEPS = 3;
+  const theme = getTheme(selectedTheme);
+
+  const cardStyle = {background:'#fff',borderRadius:28,padding:'30px 26px',width:'100%',maxWidth:420,boxShadow:'0 24px 64px rgba(0,0,0,0.12)'};
+  const bgStyle = {minHeight:'100vh',background:'linear-gradient('+theme.grad+')',display:'flex',alignItems:'center',justifyContent:'center',padding:20,transition:'background 0.4s'};
+  const nextBtn = (onClick, disabled, label='다음 →') => (
+    <button onClick={onClick} disabled={disabled} style={{width:'100%',padding:'14px',borderRadius:16,border:'none',background:disabled?'#e5e7eb':theme.primary,color:disabled?'#9ca3af':'#fff',fontSize:15,fontWeight:700,cursor:disabled?'default':'pointer',transition:'all 0.2s',marginTop:6}}>
+      {label}
+    </button>
+  );
+
+  // Step 0: 웰컴
+  if(step === 0) return (
+    <div className="fade-in" style={bgStyle}>
+      <div style={{...cardStyle,textAlign:'center'}}>
+        <div style={{fontSize:52,marginBottom:12}}>{selectedAnimal}</div>
+        <div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:6}}>
+          {userName ? `${userName}님, 반가워요!` : '어서 오세요!'}
+        </div>
+        <div style={{fontSize:13,color:'#9ca3af',marginBottom:28,lineHeight:1.7}}>
+          딱 3단계만 설정하면<br/>나만의 생활 관리가 시작돼요
+        </div>
+        <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:24}}>
+          {[0,1,2].map(i=><div key={i} style={{width:i===step?24:8,height:8,borderRadius:8,background:i===step?theme.primary:theme.mid,transition:'all 0.3s'}}/>)}
+        </div>
+        <button onClick={()=>setStep(1)} style={{width:'100%',padding:'15px',borderRadius:16,border:'none',background:theme.primary,color:'#fff',fontSize:16,fontWeight:700,cursor:'pointer'}}>
+          시작하기 →
+        </button>
+      </div>
+    </div>
+  );
+
+  // Step 1: 테마 색상 + 동물 선택
+  if(step === 1) return (
+    <div className="fade-in" style={bgStyle}>
+      <div style={cardStyle}>
+        <div style={{display:'flex',gap:6,marginBottom:18}}>
+          {[0,1,2].map(i=><div key={i} style={{width:i===1?24:8,height:8,borderRadius:8,background:i===1?theme.primary:theme.mid,transition:'all 0.3s'}}/>)}
+        </div>
+        <div style={{fontSize:11,color:theme.border,fontWeight:700,marginBottom:5}}>STEP 1 / 3</div>
+        <div style={{fontSize:19,fontWeight:800,color:'#1f2937',marginBottom:3}}>나만의 스타일을 골라요</div>
+        <div style={{fontSize:13,color:'#9ca3af',marginBottom:18}}>앱의 색상과 캐릭터를 선택해요</div>
+
+        {/* 테마 색상 */}
+        <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:10}}>🎨 메인 색상</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:8,marginBottom:20}}>
+          {THEMES.map(t=>(
+            <button key={t.id} onClick={()=>setSelectedTheme(t.id)} style={{
+              width:'100%',aspectRatio:'1',borderRadius:12,border:`3px solid ${selectedTheme===t.id?t.primary:'transparent'}`,
+              background:t.primary,cursor:'pointer',margin:0,
+              boxShadow:selectedTheme===t.id?`0 0 0 2px #fff, 0 0 0 4px ${t.primary}`:'none',
+              transition:'all 0.15s',position:'relative',
+            }}>
+              {selectedTheme===t.id&&<span style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:800}}>✓</span>}
+            </button>
+          ))}
+        </div>
+        <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:10}}>
+          🐾 나의 캐릭터 <span style={{fontSize:11,color:'#9ca3af',fontWeight:400}}>— 사이드바에 표시돼요</span>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:6,marginBottom:20}}>
+          {ANIMALS.map(a=>(
+            <button key={a} onClick={()=>setSelectedAnimal(a)} style={{
+              width:'100%',aspectRatio:'1',borderRadius:10,fontSize:20,
+              border:`2px solid ${selectedAnimal===a?theme.primary:'#f3f4f6'}`,
+              background:selectedAnimal===a?theme.light:'#fff',
+              cursor:'pointer',margin:0,display:'flex',alignItems:'center',justifyContent:'center',
+              transition:'all 0.15s',
+            }}>{a}</button>
+          ))}
+        </div>
+        {/* 미리보기 */}
+        <div style={{background:theme.bg,borderRadius:14,padding:'12px 14px',border:`1.5px solid ${theme.mid}`,marginBottom:16,display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:24}}>{selectedAnimal}</span>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:theme.primary}}>{userName||'민아'}님, 수고했어요!</div>
+            <div style={{fontSize:11,color:theme.border}}>오늘의 명언이 여기 표시돼요</div>
+          </div>
+        </div>
+        {nextBtn(()=>setStep(2), false)}
+      </div>
+    </div>
+  );
+
+  // Step 2: 자취 경력
+  if(step === 2) {
+    const options = ['방금 이사', '1년 이상', '오래됨'];
+    const labels = ['방금 이사했어요', '자취한 지 1년 이상', '오래된 자취생이에요'];
+    const icons = ['🏠', '🌱', '🌳'];
+    const descs = ['기본 생활 루틴을 추천해드려요', '일반적인 생활 관리 세트를 설정해요', '전체 생활 관리 세트를 설정해요'];
+    return (
+      <div className="fade-in" style={bgStyle}>
+        <div style={cardStyle}>
+          <div style={{display:'flex',gap:6,marginBottom:18}}>
+            {[0,1,2].map(i=><div key={i} style={{width:i===2?24:8,height:8,borderRadius:8,background:i===2?theme.primary:theme.mid,transition:'all 0.3s'}}/>)}
+          </div>
+          <div style={{fontSize:11,color:theme.border,fontWeight:700,marginBottom:5}}>STEP 2 / 3</div>
+          <div style={{fontSize:19,fontWeight:800,color:'#1f2937',marginBottom:4}}>자취한 지 얼마나 됐어요?</div>
+          <div style={{fontSize:13,color:'#9ca3af',marginBottom:18}}>선택에 맞게 생활 관리 항목을 자동으로 설정해드려요</div>
+          <div style={{display:'flex',flexDirection:'column',gap:9,marginBottom:18}}>
+            {options.map((opt,i)=>(
+              <button key={opt} onClick={()=>setLifeChoice(opt)} style={{padding:'14px 16px',borderRadius:15,border:`2px solid ${lifeChoice===opt?theme.primary:'#f3f4f6'}`,background:lifeChoice===opt?theme.bg:'#fafafa',cursor:'pointer',width:'100%',margin:0,textAlign:'left',transition:'all 0.15s',display:'flex',alignItems:'center',gap:12}}>
+                <span style={{fontSize:22}}>{icons[i]}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:lifeChoice===opt?theme.primary:'#1f2937'}}>{labels[i]}</div>
+                  <div style={{fontSize:11,color:'#9ca3af',marginTop:1}}>{descs[i]}</div>
+                </div>
+                {lifeChoice===opt&&<span style={{fontSize:15,color:theme.primary}}>✓</span>}
+              </button>
+            ))}
+          </div>
+          {nextBtn(()=>{if(lifeChoice)onComplete(lifeChoice,selectedAnimal,selectedTheme);}, !lifeChoice, '완료 →')}
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+// ============================================================
+// APP ROOT — Firebase 통합
+// ============================================================
+function App() {
+  const fb = useFirebase();
+  const [authState, setAuthState] = React.useState('loading'); // loading | welcome | login | signup | onboarding | app
+  const [user, setUser] = React.useState(null);
+
+  // Firebase Auth 상태 감지
+  React.useEffect(() => {
+    if(!fb) return;
+    const unsub = fb.onAuthStateChanged(fb.auth, async (u) => {
+      if(u) {
+        setUser(u);
+        // Firestore에서 온보딩 완료 여부 확인
+        const snap = await fb.getDoc(fb.doc(fb.db, 'users', u.uid));
+        if(snap.exists() && snap.data().onboarded) {
+          setAuthState('app');
+        } else {
+          setAuthState('onboarding');
+        }
+      } else {
+        setUser(null);
+        setAuthState('welcome');
+      }
+    });
+    return () => unsub();
+  }, [fb]);
+
+  // ── Firestore 실시간 동기화 ──
+  const [foods, setFoods] = React.useState([]);
+  const [lifeItems, setLifeItems] = React.useState([]);
+  const [streak, setStreak] = React.useState({count:0, lastDate:null});
+  const [weeklyLog, setWeeklyLog] = React.useState({});
+  const [userName, setUserName] = React.useState('');
+  const [animal, setAnimal] = React.useState('🐻');
+  const [themeId, setThemeId] = React.useState('purple');
+
+  React.useEffect(() => {
+    if(!fb || !user || authState !== 'app') return;
+    const uid = user.uid;
+
+    // 프로필
+    fb.getDoc(fb.doc(fb.db, 'users', uid)).then(snap => {
+      if(snap.exists()) {
+        const d = snap.data();
+        setUserName(d.name || user.displayName || '');
+        setStreak(d.streak || {count:0, lastDate:null});
+        setWeeklyLog(d.weeklyLog || {});
+        setAnimal(d.animal || '🐻');
+        setThemeId(d.themeId || 'purple');
+      }
+    });
+
+    // 식재료 실시간
+    const unsubFood = fb.onSnapshot(fb.collection(fb.db, 'users', uid, 'foods'), snap => {
+      setFoods(snap.docs.map(d => ({id:d.id, ...d.data()})));
+    });
+    // 생활관리 실시간
+    const unsubLife = fb.onSnapshot(fb.collection(fb.db, 'users', uid, 'lifeItems'), snap => {
+      setLifeItems(snap.docs.map(d => ({id:d.id, ...d.data()})));
+    });
+    return () => { unsubFood(); unsubLife(); };
+  }, [fb, user, authState]);
+
+  // ── Firestore CRUD ──
+  async function addFood(f) {
+    if(!fb||!user) return;
+    await fb.addDoc(fb.collection(fb.db,'users',user.uid,'foods'), f);
+  }
+  async function deleteFood(id) {
+    if(!fb||!user) return;
+    await fb.deleteDoc(fb.doc(fb.db,'users',user.uid,'foods',id));
+  }
+  async function editFood(id, data) {
+    if(!fb||!user) return;
+    await fb.updateDoc(fb.doc(fb.db,'users',user.uid,'foods',id), data);
+  }
+  async function addLife(c) {
+    if(!fb||!user) return;
+    await fb.addDoc(fb.collection(fb.db,'users',user.uid,'lifeItems'), c);
+  }
+  async function toggleLife(id) {
+    if(!fb||!user) return;
+    const item = lifeItems.find(c=>c.id===id);
+    if(!item) return;
+    await fb.updateDoc(fb.doc(fb.db,'users',user.uid,'lifeItems',id), {
+      done: !item.done,
+      lastDone: !item.done ? getToday() : item.lastDone,
+    });
+  }
+  async function deleteLife(id) {
+    if(!fb||!user) return;
+    await fb.deleteDoc(fb.doc(fb.db,'users',user.uid,'lifeItems',id));
+  }
+  async function editLife(id, data) {
+    if(!fb||!user) return;
+    await fb.updateDoc(fb.doc(fb.db,'users',user.uid,'lifeItems',id), data);
+  }
+  async function updateStreak(routinesDone, routinesTotal) {
+    if(!fb||!user) return;
+    const todayStr = getToday();
+    const pct = routinesTotal ? Math.round(routinesDone/routinesTotal*100) : 0;
+    if(pct >= 60) {
+      if(streak.lastDate === todayStr) return;
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+      const yStr = yesterday.toISOString().split('T')[0];
+      const newCount = streak.lastDate === yStr ? streak.count+1 : 1;
+      const newStreak = {count:newCount, lastDate:todayStr};
+      const newLog = {...weeklyLog, [todayStr]:pct};
+      setStreak(newStreak); setWeeklyLog(newLog);
+      await fb.updateDoc(fb.doc(fb.db,'users',user.uid), {streak:newStreak, weeklyLog:newLog});
+    }
+  }
+  async function handleLogout() {
+    if(!fb) return;
+    await fb.signOut(fb.auth);
+  }
+  async function completeOnboarding(choice, chosenAnimal, chosenTheme) {
+    if(!fb||!user) return;
+    const uid = user.uid;
+    const presets = (ONBOARDING_PRESETS[choice]||[]).map((item,i) => ({
+      ...item, done:false, lastDone:null, freqDays:[], createdAt:new Date().toISOString()
+    }));
+    await fb.setDoc(fb.doc(fb.db,'users',uid), {
+      name: user.displayName || '',
+      onboarded: true,
+      createdAt: fb.serverTimestamp(),
+      streak: {count:0, lastDate:null},
+      weeklyLog: {},
+      animal: chosenAnimal || '🐻',
+      themeId: chosenTheme || 'purple',
+    }, {merge:true});
+    for(const item of presets) {
+      await fb.addDoc(fb.collection(fb.db,'users',uid,'lifeItems'), item);
+    }
+    setAnimal(chosenAnimal || '🐻');
+    setThemeId(chosenTheme || 'purple');
+    setAuthState('app');
+  }
+
+  const [page, setPage] = React.useState('home');
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const {isMob, isTablet} = useResponsive();
+  const PAGE_TITLES = {home:'🏠 홈', food:'🥕 식재료', life:'🌀 생활 관리', hub:'🔖 추천 허브', tips:'💡 생활 팁', settings:'⚙️ 설정'};
+
+  // ── 로딩 ──
+  if(authState === 'loading') return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#f5f3ff,#ede9fe)'}}>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontSize:48,marginBottom:12}}>🏠</div>
+        <div style={{fontSize:18,fontWeight:700,color:'#7c3aed'}}>mylife.</div>
+        <div style={{fontSize:13,color:'#a78bfa',marginTop:6}}>불러오는 중...</div>
+      </div>
+    </div>
+  );
+
+  if(authState === 'welcome') return (
+    <WelcomeScreen
+      onStart={()=>setAuthState('signup')}
+      onLogin={()=>setAuthState('login')}
+    />
+  );
+  if(authState === 'login' || authState === 'signup') return (
+    <AuthScreen
+      mode={authState}
+      onSuccess={(u)=>{setUser(u);}}
+      onBack={()=>setAuthState('welcome')}
+    />
+  );
+  if(authState === 'onboarding') return (
+    <Onboarding
+      userName={user?.displayName || ''}
+      onComplete={completeOnboarding}
+    />
+  );
+
+  // ── 메인 앱 ──
+  const currentTheme = getTheme(themeId);
+  const MOB_NAV = [
+    {id:'home',  emoji:'🏠', label:'홈'},
+    {id:'food',  emoji:'🥕', label:'식재료'},
+    {id:'life',  emoji:'🌀', label:'생활'},
+    {id:'hub',   emoji:'🔖', label:'추천'},
+    {id:'settings',emoji:'⚙️',label:'설정'},
+  ];
+  return (
+    <ThemeCtx.Provider value={currentTheme}>
+    <div style={{display:'flex',minHeight:'100vh',background:'#f8f7fc'}}>
+      <Sidebar page={page} onNav={p=>{setPage(p);setSidebarOpen(false);}} mobileOpen={sidebarOpen} onClose={()=>setSidebarOpen(false)} userName={userName} onLogout={handleLogout} animal={animal} themeId={themeId}/>
+
+      <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0}}>
+        {/* 모바일 상단 바 */}
+        <div className="mobile-topbar" style={{background:'#fff',padding:'12px 18px',borderBottom:'1px solid #f0edf8',alignItems:'center',gap:13,position:'sticky',top:0,zIndex:30}}>
+          <button onClick={()=>setSidebarOpen(true)} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,padding:4,color:currentTheme.primary,width:'auto',margin:0}}>☰</button>
+          <div style={{fontSize:15,fontWeight:700,color:'#1f2937',flex:1}}>{PAGE_TITLES[page]}</div>
+          <div style={{fontSize:13,fontWeight:900,color:currentTheme.primary}}>mylife<span style={{color:currentTheme.border}}>.</span></div>
+        </div>
+
+        {/* 메인 콘텐츠 */}
+        <main style={{flex:1,padding:isMob?'16px 14px 90px':'28px 34px',maxWidth:1060,width:'100%',overflowX:'hidden'}}>
+          {page==='home'&&<HomePage foods={foods} lifeItems={lifeItems} streak={streak} onNav={setPage} userName={userName} onQuickAdd={addFood} onQuickCheck={toggleLife}/>}
+          {page==='food'&&<FoodPage foods={foods} onAdd={addFood} onDelete={deleteFood} onEdit={editFood}/>}
+          {page==='life'&&<LifePage lifeItems={lifeItems} onAdd={addLife} onToggle={toggleLife} onDelete={deleteLife} onEdit={editLife} streak={streak} weeklyLog={weeklyLog} updateStreak={updateStreak}/>}
+          {page==='tips'&&<TipsPage/>}
+          {page==='hub'&&<HubPage foods={foods} lifeItems={lifeItems} onNav={setPage}/>}
+          {page==='settings'&&<SettingsPage user={user} fb={fb} userName={userName} setUserName={setUserName} animal={animal} setAnimal={setAnimal} themeId={themeId} setThemeId={setThemeId}/>}
+        </main>
+
+        {/* 모바일 하단 탭 바 */}
+        <div className="mobile-tab-bar" style={{position:'fixed',bottom:0,left:0,right:0,background:'#fff',borderTop:'1px solid #f0edf8',padding:'6px 0 calc(6px + env(safe-area-inset-bottom))',zIndex:30,justifyContent:'space-around',alignItems:'center',boxShadow:'0 -4px 16px rgba(0,0,0,0.06)'}}>
+          {MOB_NAV.map(n=>(
+            <button key={n.id} onClick={()=>setPage(n.id)} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'4px 8px',border:'none',background:'transparent',cursor:'pointer',width:'auto',margin:0,flex:1,maxWidth:80,minWidth:0}}>
+              <span style={{fontSize:22,lineHeight:1,filter:page===n.id?'none':'grayscale(0.3)',opacity:page===n.id?1:0.5}}>{n.emoji}</span>
+              <span style={{fontSize:10,fontWeight:page===n.id?700:500,color:page===n.id?currentTheme.primary:'#9ca3af',whiteSpace:'nowrap'}}>{n.label}</span>
+              {page===n.id&&<div style={{width:20,height:3,borderRadius:2,background:currentTheme.primary,marginTop:1}}/>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+    </ThemeCtx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+</script>
