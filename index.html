@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>mylife. — 자취 생활 관리</title>
+  <title>LifeFit — 나만의 생활 매니저</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"/>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;}
@@ -139,36 +139,59 @@ function getRepeatLabel(r) {
   return '한 번만';
 }
 function isTodayItem(r) {
-  const d=new Date().getDay();
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=today.getDay();
   if(r.freq==='daily')    return true;
   if(r.freq==='weekdays') return d>=1&&d<=5;
   if(r.freq==='weekend')  return d===0||d===6;
   if(r.freq==='weekly')   return (r.freqDays||[]).includes(d);
   if(r.freq==='interval') {
-    if(!r.createdAt||!r.intervalDays) return false;
-    const c=new Date(r.createdAt); c.setHours(0,0,0,0);
-    const n=new Date(); n.setHours(0,0,0,0);
-    return Math.floor((n-c)/864e5)%r.intervalDays===0;
+    if(!r.intervalDays) return false;
+    // 마지막 완료일이 있으면 그 날 기준으로 다음 날짜 계산
+    const base = r.doneDate ? new Date(r.doneDate) : (r.createdAt ? new Date(r.createdAt) : today);
+    base.setHours(0,0,0,0);
+    const diff = Math.floor((today-base)/864e5);
+    if(diff<0) return false;
+    // 완료한 당일은 표시 X (diff===0이면 오늘 이미 한 것)
+    if(r.doneDate===getToday()) return false;
+    return diff>=r.intervalDays;
   }
-  if(r.freq==='monthly') return new Date().getDate()===(r.monthDay||1);
+  if(r.freq==='monthly') {
+    const targetDay = r.monthDay||1;
+    if(today.getDate()!==targetDay) return false;
+    // 이번 달에 이미 완료했으면 제외
+    if(r.doneDate) {
+      const done=new Date(r.doneDate); done.setHours(0,0,0,0);
+      if(done.getFullYear()===today.getFullYear()&&done.getMonth()===today.getMonth()) return false;
+    }
+    return true;
+  }
   return true;
 }
 function getNextItemDate(r) {
   const today=new Date(); today.setHours(0,0,0,0);
   const d=today.getDay();
   if(isTodayItem(r)) return null;
-  if(r.freq==='weekdays') { const n=new Date(today); n.setDate(today.getDate()+(d===0?1:2)); return n; }
-  if(r.freq==='weekend')  { const n=new Date(today); n.setDate(today.getDate()+(6-d||7)); return n; }
+  if(r.freq==='weekdays') {
+    const n=new Date(today);
+    let add=1; while(true){const nd=new Date(today);nd.setDate(today.getDate()+add);if(nd.getDay()>=1&&nd.getDay()<=5){n.setDate(today.getDate()+add);break;}add++;}
+    return n;
+  }
+  if(r.freq==='weekend') {
+    const n=new Date(today); const rem=(6-d+7)%7||7; n.setDate(today.getDate()+rem); return n;
+  }
   if(r.freq==='weekly'&&r.freqDays?.length) {
-    let min=7;
+    let min=8;
     r.freqDays.forEach(fd=>{ let diff=fd-d; if(diff<=0)diff+=7; if(diff<min)min=diff; });
     const n=new Date(today); n.setDate(today.getDate()+min); return n;
   }
   if(r.freq==='interval'&&r.intervalDays) {
-    const c=new Date(r.createdAt||today); c.setHours(0,0,0,0);
-    const diff=Math.floor((today-c)/864e5);
-    const rem=r.intervalDays-(diff%r.intervalDays);
-    const n=new Date(today); n.setDate(today.getDate()+rem); return n;
+    // 마지막 완료일 기준
+    const base = r.doneDate ? new Date(r.doneDate) : (r.createdAt ? new Date(r.createdAt) : today);
+    base.setHours(0,0,0,0);
+    const diff=Math.floor((today-base)/864e5);
+    const rem=r.intervalDays-diff;
+    const n=new Date(today); n.setDate(today.getDate()+(rem>0?rem:r.intervalDays)); return n;
   }
   if(r.freq==='monthly'&&r.monthDay) {
     const n=new Date(today); n.setDate(r.monthDay);
@@ -184,6 +207,27 @@ function formatNextDate(nd) {
   if(diff===2) return '모레';
   if(diff<=7)  return `${diff}일 후`;
   return `${nd.getMonth()+1}/${nd.getDate()}`;
+}
+
+// 특정 날짜(Date 객체)에 해당 루틴이 있는지 확인
+function isItemOnDate(r, date) {
+  const d = date.getDay();
+  const t = new Date(date); t.setHours(0,0,0,0);
+  if(r.freq==='daily')    return true;
+  if(r.freq==='weekdays') return d>=1&&d<=5;
+  if(r.freq==='weekend')  return d===0||d===6;
+  if(r.freq==='weekly')   return (r.freqDays||[]).includes(d);
+  if(r.freq==='interval'&&r.intervalDays) {
+    // 마지막 완료일 기준으로 계산
+    const base = r.doneDate ? new Date(r.doneDate) : (r.createdAt ? new Date(r.createdAt) : t);
+    base.setHours(0,0,0,0);
+    const diff = Math.floor((t-base)/864e5);
+    if(diff<0) return false;
+    if(diff===0) return false; // 완료한 당일은 제외
+    return diff>=r.intervalDays && diff%r.intervalDays===0;
+  }
+  if(r.freq==='monthly') return t.getDate()===(r.monthDay||1);
+  return true;
 }
 
 // ============================================================
@@ -277,17 +321,17 @@ const MY_TIP_COLORS=[
 // ─── 명언 ───
 const QUOTES=[
   {text:"작은 습관이 큰 변화를 만들어요.",author:"제임스 클리어"},
-  {text:"오늘 하루도 스스로를 위한 선택을 해요.",author:"mylife."},
-  {text:"완벽하지 않아도 괜찮아, 오늘도 해냈으니까.",author:"mylife."},
+  {text:"오늘 하루도 스스로를 위한 선택을 해요.",author:"LifeFit"},
+  {text:"완벽하지 않아도 괜찮아, 오늘도 해냈으니까.",author:"LifeFit"},
   {text:"정리된 공간은 정리된 마음을 만들어요.",author:""},
   {text:"매일 1%씩 나아지면, 1년 후엔 37배 성장해요.",author:""},
-  {text:"혼자 살아가는 것도 배움이에요.",author:"mylife."},
+  {text:"혼자 살아가는 것도 배움이에요.",author:"LifeFit"},
   {text:"작은 루틴이 쌓이면 인생이 달라져요.",author:""},
-  {text:"오늘 냉장고 정리만 해도 충분해요 💜",author:"mylife."},
+  {text:"오늘 냉장고 정리만 해도 충분해요 💜",author:"LifeFit"},
   {text:"나를 챙기는 것도 중요한 일이에요.",author:""},
-  {text:"하루에 한 가지만 잘해도 성공이에요.",author:"mylife."},
+  {text:"하루에 한 가지만 잘해도 성공이에요.",author:"LifeFit"},
   {text:"좋은 습관은 좋은 삶의 시작이에요.",author:""},
-  {text:"지금 이 순간도 잘 하고 있어요.",author:"mylife."},
+  {text:"지금 이 순간도 잘 하고 있어요.",author:"LifeFit"},
 ];
 function getTodayQuote() {
   const idx = new Date().getDate() % QUOTES.length;
@@ -319,6 +363,17 @@ function useResponsive() {
   }, []);
   return { isMob: width < 768, isTablet: width >= 768 && width < 1024, isDesktop: width >= 1024, width };
 }
+
+// ─── 홈 위젯 설정 ───
+const DEFAULT_WIDGETS = [
+  { id:'greeting',  label:'환영 인사',       emoji:'👋', enabled:true  },
+  { id:'alerts',    label:'오늘 챙길 것들',  emoji:'🔔', enabled:true  },
+  { id:'stats',     label:'생활 상태 요약',  emoji:'📊', enabled:true  },
+  { id:'food',      label:'먼저 먹어야 해요',emoji:'🍱', enabled:true  },
+  { id:'recommend', label:'오늘의 추천',     emoji:'✨', enabled:true  },
+  { id:'quick',     label:'빠른 실행',       emoji:'⚡', enabled:true  },
+  { id:'weekly',    label:'이번 주 달성',    emoji:'📅', enabled:true  },
+];
 
 // ─── 동물 이모지 ───
 const ANIMALS = ['🐻','🐱','🐶','🐰','🦊','🐼','🐨','🐸','🐧','🦝','🐺','🦁','🐮','🐹','🦔','🐻‍❄️'];
@@ -448,7 +503,7 @@ function Sidebar({page,onNav,mobileOpen,onClose,userName,onLogout,animal,themeId
       {mobileOpen&&<div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:40}}/>}
       <aside className="desktop-sidebar" style={{width:200,minWidth:200,background:'#fff',borderRight:'1px solid #f0edf8',display:'flex',flexDirection:'column',padding:'22px 12px',position:'sticky',top:0,height:'100vh',overflowY:'auto',zIndex:50}}>
         <div style={{padding:'4px 10px 16px',borderBottom:'1px solid #f0edf8',marginBottom:8}}>
-          <div onClick={()=>{onNav('home');onClose();}} style={{fontSize:19,fontWeight:900,color:theme.primary,letterSpacing:'-0.5px',cursor:'pointer'}}>🏠 mylife<span style={{color:theme.border}}>.</span></div>
+          <div onClick={()=>{onNav('home');onClose();}} style={{fontSize:19,fontWeight:900,color:theme.primary,letterSpacing:'-0.5px',cursor:'pointer'}}>🏠 LifeFit<span style={{color:theme.border}}>.</span></div>
           <div style={{fontSize:11,color:theme.border,marginTop:2,fontWeight:600}}>나를 위한 작은 습관</div>
         </div>
         <nav style={{flex:1}}>
@@ -482,7 +537,7 @@ function Sidebar({page,onNav,mobileOpen,onClose,userName,onLogout,animal,themeId
       {mobileOpen&&(
         <aside style={{position:'fixed',left:0,top:0,width:260,height:'100vh',background:'#fff',zIndex:50,display:'flex',flexDirection:'column',padding:'22px 14px',overflowY:'auto',boxShadow:'4px 0 24px rgba(0,0,0,0.12)',animation:'slideUp 0.2s ease'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 6px 16px',borderBottom:'1px solid #f0edf8',marginBottom:8}}>
-            <div onClick={()=>{onNav('home');onClose();}} style={{fontSize:19,fontWeight:900,color:theme.primary,letterSpacing:'-0.5px',cursor:'pointer'}}>🏠 mylife<span style={{color:theme.border}}>.</span></div>
+            <div onClick={()=>{onNav('home');onClose();}} style={{fontSize:19,fontWeight:900,color:theme.primary,letterSpacing:'-0.5px',cursor:'pointer'}}>🏠 LifeFit<span style={{color:theme.border}}>.</span></div>
             <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:20,color:'#9ca3af',padding:4,width:'auto',margin:0}}>✕</button>
           </div>
           <nav style={{flex:1}}>
@@ -535,10 +590,12 @@ function QuickActionBtn({emoji, label, onClick}) {
   );
 }
 
-function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck}) {
+function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck,widgets}) {
   const theme = useTheme();
   const todayDay = new Date().getDay();
   const greeting = getGreeting();
+  const wList = widgets || DEFAULT_WIDGETS;
+  const isOn = (id) => { const w = wList.find(w=>w.id===id); return w ? w.enabled : true; };
 
   // ── 우선순위 알림 생성 (최대 3개) ──
   const alerts = [];
@@ -560,7 +617,7 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
   }));
 
   const todayRoutines = lifeItems.filter(c=>c.section==='루틴'&&isTodayItem(c));
-  const undoneRoutines = todayRoutines.filter(c=>!c.done);
+  const undoneRoutines = todayRoutines.filter(c=>!(c.done&&c.doneDate===today));
   if(undoneRoutines.length>0&&alerts.length<3) alerts.push({
     id:'routine', emoji:'🌀', level:'info',
     title:`오늘 루틴 ${undoneRoutines.length}개 남았어요`,
@@ -575,7 +632,8 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
   const urgentList = foods.map(f=>({...f,dl:calcDaysLeft(f.expiryDate)})).filter(f=>f.dl<=5&&f.dl>=0).sort((a,b)=>a.dl-b.dl).slice(0,4);
 
   // ── 생활 상태 요약 ──
-  const doneLife = lifeItems.filter(c=>c.done).length;
+  const today = getToday();
+  const doneLife = lifeItems.filter(c=>c.section==='루틴'?(c.done&&c.doneDate===today):c.done).length;
   const totalLife = lifeItems.length;
   const lifePct = totalLife?Math.round(doneLife/totalLife*100):0;
   const streakCount = (streak||{count:0}).count;
@@ -588,7 +646,7 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
     <div style={{paddingBottom:80}}>
 
       {/* ① 환영 헤더 */}
-      <div style={{background:'linear-gradient(135deg,'+theme.primary+','+theme.border+')',borderRadius:24,padding:'22px 22px 18px',marginBottom:18,position:'relative',overflow:'hidden'}}>
+      {isOn('greeting')&&<div style={{background:'linear-gradient(135deg,'+theme.primary+','+theme.border+')',borderRadius:24,padding:'22px 22px 18px',marginBottom:18,position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',right:-10,top:-10,fontSize:80,opacity:0.08,lineHeight:1}}>🏠</div>
         <div style={{fontSize:12,color:'rgba(255,255,255,0.75)',fontWeight:600,marginBottom:4}}>{todayLabel()}</div>
         <div style={{fontSize:20,fontWeight:800,color:'#fff',marginBottom:4}}>
@@ -603,10 +661,10 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
             <span style={{fontSize:12,color:'#fff',fontWeight:700}}>{streakCount}일 연속 달성 중</span>
           </div>
         )}
-      </div>
+      </div>}
 
-      {/* ② 오늘 핵심 알림 (최대 3개) */}
-      <div style={{marginBottom:18}}>
+      {/* ② 오늘 핵심 알림 */}
+      {isOn('alerts')&&<div style={{marginBottom:18}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
           <div style={{fontSize:15,fontWeight:800,color:'#1f2937'}}>
             오늘 챙길 것들
@@ -636,10 +694,10 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
-      {/* ③ 생활 상태 요약 — 3개 카드 */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:18}}>
+      {/* ③ 생활 상태 요약 */}
+      {isOn('stats')&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:18}}>
         <div style={{background:'#fff',borderRadius:16,padding:'14px 10px',textAlign:'center',border:'1.5px solid #f3f4f6'}}>
           <div style={{fontSize:11,color:'#9ca3af',marginBottom:6,fontWeight:600}}>생활 달성</div>
           <div style={{position:'relative',width:52,height:52,margin:'0 auto 6px'}}>
@@ -663,7 +721,7 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
           <div style={{fontSize:30,marginBottom:2}}>🚨</div>
           <div style={{fontSize:20,fontWeight:800,color:urgentCount>0?'#ef4444':'#22c55e',lineHeight:1}}>{urgentCount}개</div>
         </div>
-      </div>
+      </div>}
 
       {/* ④ 유통기한 임박 식재료 */}
       {urgentList.length>0&&(
@@ -691,7 +749,7 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
       )}
 
       {/* ⑤ 상황별 추천 */}
-      {situRecs.length>0&&(
+      {isOn('recommend')&&situRecs.length>0&&(
         <div style={{background:'#fff',borderRadius:18,padding:'16px 18px',border:'1.5px solid #f3f4f6',marginBottom:18}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
             <div style={{fontSize:14,fontWeight:700,color:'#1f2937'}}>✨ {userName?`${userName}님을 위한 추천`:'오늘의 추천'}</div>
@@ -715,7 +773,7 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
       )}
 
       {/* ⑥ 빠른 액션 */}
-      <div style={{marginBottom:18}}>
+      {isOn('quick')&&<div style={{marginBottom:18}}>
         <div style={{fontSize:14,fontWeight:700,color:'#1f2937',marginBottom:10}}>⚡ 빠른 실행</div>
         <div style={{display:'flex',gap:8}}>
           <QuickActionBtn emoji="🥕" label="식재료 추가" onClick={()=>onNav('food')}/>
@@ -731,10 +789,10 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
           }}/>
           <QuickActionBtn emoji="🌀" label="루틴 보기" onClick={()=>onNav('life')}/>
         </div>
-      </div>
+      </div>}
 
       {/* ⑦ 이번 주 */}
-      <div style={{background:'#fff',borderRadius:18,padding:'16px 18px',border:'1.5px solid #f3f4f6'}}>
+      {isOn('weekly')&&<div style={{background:'#fff',borderRadius:18,padding:'16px 18px',border:'1.5px solid #f3f4f6'}}>
         <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:10}}>이번 주 달성 현황</div>
         <div style={{display:'flex',gap:5}}>
           {['일','월','화','수','목','금','토'].map((d,i)=>(
@@ -748,7 +806,7 @@ function HomePage({foods,lifeItems,streak,onNav,userName,onQuickAdd,onQuickCheck
           ))}
         </div>
         <div style={{fontSize:11,color:'#9ca3af',marginTop:8,textAlign:'center'}}>연속 {streakCount}일째 생활 관리 중 🔥</div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -970,6 +1028,7 @@ function LifeItemCard({c, onToggle, onDelete, openEdit, updateStreak, lifeItems}
   const [guideOpen, setGuideOpen] = React.useState(false);
   const sec = LIFE_SECTIONS[c.section] || LIFE_SECTIONS['루틴'];
   const isToday = isTodayItem(c);
+  const isDoneToday = c.section === '루틴' ? (c.done && c.doneDate === getToday()) : c.done;
   const since = c.lastDone ? daysSince(c.lastDone) : null;
   const dLeft = c.section !== '루틴' && c.lastDone ? calcDaysLeft(addDays(c.lastDone, c.intervalDays)) : null;
   const isOverdue = dLeft !== null && dLeft < 0;
@@ -980,7 +1039,9 @@ function LifeItemCard({c, onToggle, onDelete, openEdit, updateStreak, lifeItems}
     if(c.section === '루틴') {
       const nd = !isToday ? getNextItemDate(c) : null;
       const nextLabel = nd ? formatNextDate(nd) : null;
-      if(c.done) return <span style={{fontSize:11,fontWeight:700,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:20,border:'1px solid #bbf7d0'}}>✓ 완료</span>;
+      // done이 true라도 doneDate가 오늘이 아니면 미완료로 표시
+      const isDoneToday = c.done && c.doneDate === getToday();
+      if(isDoneToday) return <span style={{fontSize:11,fontWeight:700,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:20,border:'1px solid #bbf7d0'}}>✓ 완료</span>;
       if(isToday) return <span style={{fontSize:11,fontWeight:700,color:theme.primary,background:theme.light,padding:'2px 8px',borderRadius:20,border:'1px solid #ddd6fe'}}>오늘</span>;
       return <span style={{fontSize:11,color:'#9ca3af'}}>다음: {nextLabel || '-'}</span>;
     }
@@ -999,11 +1060,11 @@ function LifeItemCard({c, onToggle, onDelete, openEdit, updateStreak, lifeItems}
             if(c.section==='루틴'&&!isToday) return;
             onToggle(c.id);
             if(c.section==='루틴') {
-              const nd = lifeItems.filter(x=>x.section==='루틴'&&x.done).length + (c.done?-1:1);
+              const nd = lifeItems.filter(x=>x.section==='루틴'&&x.done&&x.doneDate===getToday()).length + (isDoneToday?-1:1);
               updateStreak && updateStreak(nd, lifeItems.filter(x=>x.section==='루틴').length);
             }
-          }} style={{width:22,height:22,borderRadius:6,flexShrink:0,cursor:(c.section==='루틴'&&!isToday)?'default':'pointer',background:c.done?sec.color:'transparent',border:`2px solid ${c.done?sec.color:'#d1d5db'}`,display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
-            {c.done&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}
+          }} style={{width:22,height:22,borderRadius:6,flexShrink:0,cursor:(c.section==='루틴'&&!isToday)?'default':'pointer',background:isDoneToday?sec.color:'transparent',border:`2px solid ${isDoneToday?sec.color:'#d1d5db'}`,display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
+            {isDoneToday&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}
           </div>
           <span style={{fontSize:18,flexShrink:0}}>{c.emoji||'💧'}</span>
           <div style={{flex:1,minWidth:0}}>
@@ -1043,42 +1104,123 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
   const theme=useTheme();
   const [activeSection,setActiveSection]=React.useState('전체');
   const [filterDone,setFilterDone]=React.useState('전체');
-  const [selectedDayStr,setSelectedDayStr]=React.useState(null);
+  const [selectedDayIdx,setSelectedDayIdx]=React.useState(null);
+  const [calView,setCalView]=React.useState('week'); // 'week' | 'month'
+  const [calMonthOffset,setCalMonthOffset]=React.useState(0); // 0=이번달
   const [showAddModal,setShowAddModal]=React.useState(false);
   const [editTarget,setEditTarget]=React.useState(null);
   const [showPackModal,setShowPackModal]=React.useState(false);
   const emptyForm={text:'',emoji:'💧',section:'루틴',freq:'daily',freqDays:[],intervalDays:7,monthDay:1,guide:''};
   const [form,setForm]=React.useState(emptyForm);
 
-  const done=lifeItems.filter(c=>c.done).length;
-  const total=lifeItems.length;
-  const pct=total?Math.round(done/total*100):0;
+  const todayStr=getToday();
+  const todayDayIdx=new Date().getDay();
+
+  // 이번 주 날짜
+  const weekDates = ['일','월','화','수','목','금','토'].map((label,i)=>{
+    const d=new Date(); d.setDate(d.getDate()-(todayDayIdx-i)); d.setHours(0,0,0,0);
+    return {label, idx:i, date:d, dateStr:d.toISOString().split('T')[0]};
+  });
+
+  const activeDayIdx = selectedDayIdx ?? todayDayIdx;
+  const activeDayInfo = weekDates[activeDayIdx];
+  const activeDateStr = activeDayInfo.dateStr;
+  const isViewingToday = activeDateStr === todayStr;
+
+  // 특정 날짜에 해당하는 루틴 (요일 클릭용)
+  function getItemsForDay(dateInfo) {
+    return lifeItems.filter(c => c.section==='루틴' && isItemOnDate(c, dateInfo.date));
+  }
+
+  // 달성률 계산
+  const todayRoutines = lifeItems.filter(c=>c.section==='루틴'&&isTodayItem(c));
+  const doneTodayCount = todayRoutines.filter(c=>c.done&&c.doneDate===todayStr).length;
+  const doneLife = lifeItems.filter(c=>c.section==='루틴'?(c.done&&c.doneDate===todayStr):c.done).length;
+  const total = lifeItems.length;
+  const pct = total?Math.round(doneLife/total*100):0;
 
   const sectionStats=Object.keys(LIFE_SECTIONS).map(s=>({
-    s, done:lifeItems.filter(c=>c.section===s&&c.done).length,
+    s,
+    done:lifeItems.filter(c=>c.section===s&&(s==='루틴'?(c.done&&c.doneDate===todayStr):c.done)).length,
     total:lifeItems.filter(c=>c.section===s).length,
   }));
 
-  const filtered=lifeItems
-    .filter(c=>{
-      if(activeSection!=='전체'&&c.section!==activeSection)return false;
-      if(filterDone==='완료'&&!c.done)return false;
-      if(filterDone==='미완료'&&c.done)return false;
-      return true;
-    })
-    .sort((a,b)=>{
-      const aOver=a.section!=='루틴'&&a.lastDone?daysSince(a.lastDone)>=a.intervalDays:false;
-      const bOver=b.section!=='루틴'&&b.lastDone?daysSince(b.lastDone)>=b.intervalDays:false;
-      const aToday=isTodayItem(a), bToday=isTodayItem(b);
-      if(aOver&&!bOver)return -1; if(!aOver&&bOver)return 1;
-      if(aToday&&!bToday)return -1; if(!aToday&&bToday)return 1;
-      return (a.done?1:0)-(b.done?1:0);
-    });
+  // 오늘 목록 (isTodayItem으로 필터)
+  const todayFiltered = lifeItems.filter(c=>{
+    if(activeSection!=='전체'&&c.section!==activeSection) return false;
+    if(c.section==='루틴' && !isTodayItem(c)) return false;
+    const isDone = c.section==='루틴'?(c.done&&c.doneDate===todayStr):c.done;
+    if(filterDone==='완료'&&!isDone) return false;
+    if(filterDone==='미완료'&&isDone) return false;
+    return true;
+  }).sort((a,b)=>{
+    const aOver=a.section!=='루틴'&&a.lastDone?daysSince(a.lastDone)>=a.intervalDays:false;
+    const bOver=b.section!=='루틴'&&b.lastDone?daysSince(b.lastDone)>=b.intervalDays:false;
+    if(aOver&&!bOver) return -1; if(!aOver&&bOver) return 1;
+    const aD=a.section==='루틴'?(a.done&&a.doneDate===todayStr):a.done;
+    const bD=b.section==='루틴'?(b.done&&b.doneDate===todayStr):b.done;
+    return (aD?1:0)-(bD?1:0);
+  });
+
+  // 다가오는 루틴 (오늘 아닌 것들)
+  const upcomingRoutines = lifeItems
+    .filter(c=>c.section==='루틴'&&!isTodayItem(c))
+    .map(c=>({...c, nextDate:getNextItemDate(c)}))
+    .filter(c=>c.nextDate)
+    .sort((a,b)=>a.nextDate-b.nextDate)
+    .slice(0,6);
+
+  // 선택된 요일의 루틴
+  const selectedDayItems = isViewingToday ? null : getItemsForDay(activeDayInfo);
+
+  // ── 월간 달력 데이터 ──
+  function getMonthCalData() {
+    const base = new Date();
+    base.setDate(1);
+    base.setMonth(base.getMonth()+calMonthOffset);
+    const year=base.getFullYear(), month=base.getMonth();
+    const firstDay=new Date(year,month,1).getDay();
+    const lastDate=new Date(year,month+1,0).getDate();
+    // 달성률: weeklyLog에서 해당 날짜 가져오기
+    const days=[];
+    for(let i=0;i<firstDay;i++) days.push(null);
+    for(let d=1;d<=lastDate;d++){
+      const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const pct=(weeklyLog||{})[dateStr]||0;
+      const isToday=dateStr===todayStr;
+      // 해당 날짜에 루틴이 있는지 확인
+      const dateObj=new Date(year,month,d); dateObj.setHours(0,0,0,0);
+      const hasRoutine=lifeItems.some(c=>c.section==='루틴'&&isItemOnDate(c,dateObj));
+      days.push({d, dateStr, pct, isToday, hasRoutine});
+    }
+    return {days, year, month};
+  }
+  const calData = getMonthCalData();
+  const monthNames=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  function calDayBg(day) {
+    if(!day) return 'transparent';
+    if(day.isToday) return theme.primary;
+    if(!day.hasRoutine) return '#f9fafb';
+    if(day.pct===0) return '#f3f4f6';
+    if(day.pct<40)  return '#fef3c7';
+    if(day.pct<70)  return '#fde68a';
+    if(day.pct<100) return theme.light;
+    return theme.mid;
+  }
+  function calDayColor(day) {
+    if(!day) return 'transparent';
+    if(day.isToday) return '#fff';
+    if(!day.hasRoutine) return '#d1d5db';
+    if(day.pct===0) return '#9ca3af';
+    if(day.pct<40)  return '#b45309';
+    if(day.pct<70)  return '#92400e';
+    if(day.pct<100) return theme.primary;
+    return theme.primary;
+  }
 
   function openAdd(section) {
-    setEditTarget(null);
-    setForm({...emptyForm,section:section||'루틴'});
-    setShowAddModal(true);
+    setEditTarget(null); setForm({...emptyForm,section:section||'루틴'}); setShowAddModal(true);
   }
   function openEdit(item) {
     setEditTarget(item);
@@ -1094,6 +1236,7 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
 
   return (
     <div>
+      {/* 헤더 */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:18}}>
         <div><div style={{fontSize:21,fontWeight:800,color:'#1f2937',marginBottom:3}}>🌀 생활 관리</div><div style={{fontSize:13,color:'#9ca3af'}}>혼자 살면서 놓치기 쉬운 것들</div></div>
         <div style={{display:'flex',gap:7}}>
@@ -1107,8 +1250,8 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
         <div style={{display:'flex',alignItems:'center',gap:18}}>
           <CircleGauge pct={pct} size={78} color="#fff"/>
           <div style={{flex:1}}>
-            <div style={{fontSize:13,opacity:0.85,marginBottom:2}}>전체 달성률</div>
-            <div style={{fontSize:15,fontWeight:700,marginBottom:5}}>{done}/{total} 완료 {pct===100?'🎉':pct>=60?'💪':'🌱'}</div>
+            <div style={{fontSize:13,opacity:0.85,marginBottom:2}}>오늘 달성률</div>
+            <div style={{fontSize:15,fontWeight:700,marginBottom:5}}>{doneLife}/{total} 완료 {pct===100?'🎉':pct>=60?'💪':'🌱'}</div>
             <div style={{height:6,background:'rgba(255,255,255,0.25)',borderRadius:8,overflow:'hidden'}}>
               <div style={{width:`${pct}%`,height:'100%',background:'#fff',borderRadius:8,transition:'width 0.5s ease'}}/>
             </div>
@@ -1120,54 +1263,119 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
         </div>
       </div>
 
-      {/* 이번 주 — 클릭하면 해당 날 루틴 보기 */}
-      <div style={{background:'#fff',borderRadius:14,padding:'13px 16px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
-          <div style={{fontSize:12,fontWeight:700,color:'#374151'}}>이번 주 달성 현황</div>
-          {selectedDayStr&&selectedDayStr!==getToday()&&(
-            <button onClick={()=>setSelectedDayStr(null)} style={{fontSize:11,color:'#9ca3af',background:'none',border:'none',cursor:'pointer',width:'auto',margin:0}}>오늘로 돌아가기</button>
+      {/* 달력 뷰 토글 */}
+      <div style={{background:'#fff',borderRadius:14,padding:'13px 14px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+          <div style={{display:'flex',gap:6}}>
+            <button onClick={()=>setCalView('week')} style={{padding:'5px 12px',borderRadius:20,border:'none',background:calView==='week'?theme.primary:'#f3f4f6',color:calView==='week'?'#fff':'#6b7280',fontSize:12,fontWeight:calView==='week'?700:500,cursor:'pointer',width:'auto',margin:0}}>주간</button>
+            <button onClick={()=>setCalView('month')} style={{padding:'5px 12px',borderRadius:20,border:'none',background:calView==='month'?theme.primary:'#f3f4f6',color:calView==='month'?'#fff':'#6b7280',fontSize:12,fontWeight:calView==='month'?700:500,cursor:'pointer',width:'auto',margin:0}}>월간</button>
+          </div>
+          {calView==='month'&&(
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <button onClick={()=>setCalMonthOffset(p=>p-1)} style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:16,padding:'0 4px',width:'auto',margin:0}}>‹</button>
+              <span style={{fontSize:13,fontWeight:700,color:'#374151'}}>{calData.year}년 {monthNames[calData.month]}</span>
+              <button onClick={()=>setCalMonthOffset(p=>Math.min(p+1,0))} style={{background:'none',border:'none',cursor:'pointer',color:calMonthOffset===0?'#d1d5db':'#9ca3af',fontSize:16,padding:'0 4px',width:'auto',margin:0}}>›</button>
+            </div>
+          )}
+          {calView==='week'&&!isViewingToday&&(
+            <button onClick={()=>setSelectedDayIdx(null)} style={{fontSize:11,color:theme.primary,background:'none',border:'none',cursor:'pointer',width:'auto',margin:0,fontWeight:600}}>← 오늘로</button>
           )}
         </div>
-        <div style={{display:'flex',gap:5}}>
-          {['일','월','화','수','목','금','토'].map((d,i)=>{
-            const dateObj=new Date(); dateObj.setDate(dateObj.getDate()-(new Date().getDay()-i));
-            const dateStr=dateObj.toISOString().split('T')[0];
-            const isToday=i===new Date().getDay();
-            const isSelected=selectedDayStr===dateStr||(selectedDayStr===null&&isToday);
-            const achieved=(weeklyLog||{})[dateStr]>=60;
-            return (
-              <button key={i} onClick={()=>setSelectedDayStr(isToday?null:dateStr)} style={{
-                flex:1,height:38,borderRadius:9,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-                fontSize:11,fontWeight:700,gap:2,
-                background:isSelected?'#7c3aed':achieved?'#ede9fe':'#f9fafb',
-                color:isSelected?'#fff':achieved?'#7c3aed':'#9ca3af',
-                border:isSelected?'none':achieved?'1.5px solid #ddd6fe':'1px solid #f3f4f6',
-                cursor:'pointer',width:'auto',margin:0,transition:'all 0.15s',
-              }}>
-                {d}
-                {achieved&&!isSelected&&<div style={{width:4,height:4,borderRadius:'50%',background:'#7c3aed'}}/>}
-              </button>
-            );
-          })}
-        </div>
-        {/* 선택된 날짜의 루틴 미리보기 */}
-        {selectedDayStr&&selectedDayStr!==getToday()&&(
-          <div style={{marginTop:10,padding:'10px 12px',background:'#f9fafb',borderRadius:10,border:'1px solid #f3f4f6'}}>
-            <div style={{fontSize:11,fontWeight:700,color:'#374151',marginBottom:7}}>
-              📅 {selectedDayStr} 루틴
-              {(weeklyLog||{})[selectedDayStr]>=60&&<span style={{marginLeft:6,fontSize:10,color:'#7c3aed',background:'#ede9fe',padding:'1px 7px',borderRadius:20}}>✓ 달성</span>}
+
+        {/* 주간 뷰 */}
+        {calView==='week'&&(
+          <>
+            <div style={{display:'flex',gap:5}}>
+              {weekDates.map((wd,i)=>{
+                const isToday=wd.dateStr===todayStr;
+                const isSelected=i===activeDayIdx;
+                const achieved=(weeklyLog||{})[wd.dateStr]>=60;
+                const dayItems=getItemsForDay(wd);
+                return (
+                  <button key={i} onClick={()=>setSelectedDayIdx(i===todayDayIdx?null:i)} style={{
+                    flex:1,minHeight:44,borderRadius:10,display:'flex',flexDirection:'column',
+                    alignItems:'center',justifyContent:'center',gap:2,
+                    background:isSelected?theme.primary:achieved?theme.light:'#f9fafb',
+                    color:isSelected?'#fff':achieved?theme.primary:'#9ca3af',
+                    border:isSelected?'none':achieved?'1.5px solid '+theme.mid:'1px solid #f3f4f6',
+                    cursor:'pointer',width:'auto',margin:0,transition:'all 0.15s',padding:'6px 2px',
+                  }}>
+                    <span style={{fontSize:10,fontWeight:700}}>{wd.label}</span>
+                    <span style={{fontSize:13,fontWeight:800}}>{wd.date.getDate()}</span>
+                    {dayItems.length>0&&(
+                      <div style={{display:'flex',gap:1}}>
+                        {dayItems.slice(0,3).map((_,j)=>(
+                          <div key={j} style={{width:3,height:3,borderRadius:'50%',background:isSelected?'rgba(255,255,255,0.7)':theme.border}}/>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-            <div style={{display:'flex',flexDirection:'column',gap:5}}>
-              {lifeItems.filter(c=>c.section==='루틴').slice(0,5).map(c=>(
-                <div key={c.id} style={{display:'flex',alignItems:'center',gap:7,fontSize:12,color:'#6b7280'}}>
-                  <span>{c.emoji||'💧'}</span>
-                  <span style={{flex:1}}>{c.text}</span>
-                  <span style={{fontSize:10,color:'#9ca3af'}}>{getRepeatLabel(c)}</span>
+
+            {/* 선택된 날 루틴 */}
+            {!isViewingToday&&selectedDayItems&&(
+              <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f3f4f6'}}>
+                <div style={{fontSize:12,fontWeight:700,color:'#374151',marginBottom:8}}>
+                  📅 {activeDayInfo.label}요일 ({activeDayInfo.date.getMonth()+1}/{activeDayInfo.date.getDate()}) 루틴
+                  <span style={{marginLeft:6,fontSize:11,color:theme.primary,fontWeight:600}}>{selectedDayItems.length}개</span>
+                </div>
+                {selectedDayItems.length===0?(
+                  <div style={{fontSize:12,color:'#9ca3af',textAlign:'center',padding:'8px 0'}}>이 날은 예정된 루틴이 없어요</div>
+                ):(
+                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                    {selectedDayItems.map(c=>(
+                      <div key={c.id} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:10,background:theme.bg,border:'1px solid '+theme.mid}}>
+                        <span style={{fontSize:16}}>{c.emoji||'💧'}</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:600,color:'#1f2937'}}>{c.text}</div>
+                          <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>🔄 {getRepeatLabel(c)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 월간 달력 뷰 */}
+        {calView==='month'&&(
+          <div>
+            {/* 요일 헤더 */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:4}}>
+              {['일','월','화','수','목','금','토'].map((d,i)=>(
+                <div key={i} style={{textAlign:'center',fontSize:10,fontWeight:700,color:i===0?'#ef4444':i===6?'#3b82f6':'#9ca3af',padding:'3px 0'}}>{d}</div>
+              ))}
+            </div>
+            {/* 날짜 그리드 */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+              {calData.days.map((day,idx)=>(
+                <div key={idx} style={{
+                  aspectRatio:'1',display:'flex',flexDirection:'column',alignItems:'center',
+                  justifyContent:'center',borderRadius:8,
+                  background:calDayBg(day),
+                  color:calDayColor(day),
+                  fontSize:11,fontWeight:day?.isToday?800:600,
+                  border:day?.isToday?'2px solid '+theme.primary:'none',
+                  position:'relative',
+                }}>
+                  {day&&<span>{day.d}</span>}
+                  {day&&day.pct>=100&&<span style={{fontSize:7,lineHeight:1}}>✓</span>}
                 </div>
               ))}
-              {lifeItems.filter(c=>c.section==='루틴').length===0&&(
-                <div style={{fontSize:12,color:'#9ca3af',textAlign:'center'}}>등록된 루틴이 없어요</div>
-              )}
+            </div>
+            {/* 범례 */}
+            <div style={{display:'flex',gap:10,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
+              <span style={{fontSize:10,color:'#9ca3af',fontWeight:600}}>달성률</span>
+              {[{bg:'#f3f4f6',label:'0%'},{bg:'#fef3c7',label:'~40%'},{bg:'#fde68a',label:'~70%'},{bg:theme.light,label:'~99%'},{bg:theme.mid,label:'100%'}].map(s=>(
+                <div key={s.label} style={{display:'flex',alignItems:'center',gap:3}}>
+                  <div style={{width:10,height:10,borderRadius:3,background:s.bg,border:'1px solid #e5e7eb'}}/>
+                  <span style={{fontSize:10,color:'#9ca3af'}}>{s.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -1175,14 +1383,14 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
 
       {/* 섹션 탭 */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7,marginBottom:12}}>
-        <button onClick={()=>setActiveSection('전체')} style={{padding:'10px 5px',borderRadius:12,border:`1.5px solid ${activeSection==='전체'?theme.primary:'#e5e7eb'}`,background:activeSection==='전체'?theme.light:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center'}}>
+        <button onClick={()=>setActiveSection('전체')} style={{padding:'10px 5px',borderRadius:12,border:'1.5px solid '+(activeSection==='전체'?theme.primary:'#e5e7eb'),background:activeSection==='전체'?theme.light:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center'}}>
           <div style={{fontSize:14,marginBottom:2}}>📋</div>
           <div style={{fontSize:11,fontWeight:700,color:activeSection==='전체'?theme.primary:'#374151'}}>전체</div>
-          <div style={{fontSize:10,color:'#9ca3af'}}>{done}/{total}</div>
+          <div style={{fontSize:10,color:'#9ca3af'}}>{doneLife}/{total}</div>
         </button>
         {sectionStats.map(({s,done:d,total:t})=>{
           const sec=LIFE_SECTIONS[s]; const isA=activeSection===s;
-          return <button key={s} onClick={()=>setActiveSection(s)} style={{padding:'10px 5px',borderRadius:12,border:`1.5px solid ${isA?sec.color:sec.border}`,background:isA?sec.bg:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center',transition:'all 0.15s'}}>
+          return <button key={s} onClick={()=>setActiveSection(s)} style={{padding:'10px 5px',borderRadius:12,border:'1.5px solid '+(isA?sec.color:sec.border),background:isA?sec.bg:'#fff',cursor:'pointer',width:'auto',margin:0,textAlign:'center',transition:'all 0.15s'}}>
             <div style={{fontSize:14,marginBottom:2}}>{sec.icon}</div>
             <div style={{fontSize:10,fontWeight:700,color:isA?sec.color:'#374151',lineHeight:1.2}}>{sec.label}</div>
             <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>{d}/{t}</div>
@@ -1190,21 +1398,55 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
         })}
       </div>
 
-      {/* 완료/미완료 필터 */}
+      {/* 필터 */}
       <div style={{display:'flex',gap:6,marginBottom:12,justifyContent:'flex-end'}}>
         {['전체','미완료','완료'].map(s=>(
-          <button key={s} onClick={()=>setFilterDone(s)} style={{padding:'5px 11px',borderRadius:20,border:`1.5px solid ${filterDone===s?theme.primary:'#e5e7eb'}`,background:filterDone===s?theme.light:'#fff',color:filterDone===s?theme.primary:'#6b7280',fontSize:12,fontWeight:filterDone===s?700:400,cursor:'pointer',width:'auto',margin:0}}>{s}</button>
+          <button key={s} onClick={()=>setFilterDone(s)} style={{padding:'5px 11px',borderRadius:20,border:'1.5px solid '+(filterDone===s?theme.primary:'#e5e7eb'),background:filterDone===s?theme.light:'#fff',color:filterDone===s?theme.primary:'#6b7280',fontSize:12,fontWeight:filterDone===s?700:400,cursor:'pointer',width:'auto',margin:0}}>{s}</button>
         ))}
       </div>
 
-      {/* 아이템 목록 */}
-      <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:14}}>
-        {filtered.length===0?(
-          <div style={{background:'#fff',borderRadius:16,padding:'28px',textAlign:'center',color:'#9ca3af',fontSize:13,border:'1.5px solid #f3f4f6'}}><div style={{fontSize:30,marginBottom:7}}>✨</div>"추천" 버튼으로 쉽게 시작해보세요!</div>
-        ):filtered.map(c=>(
-          <LifeItemCard key={c.id} c={c} onToggle={onToggle} onDelete={onDelete} openEdit={openEdit} updateStreak={updateStreak} lifeItems={lifeItems}/>
-        ))}
+      {/* 오늘 할 일 */}
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:9}}>
+          오늘 할 일
+          <span style={{marginLeft:6,fontSize:11,color:'#9ca3af',fontWeight:400}}>({doneTodayCount}/{todayRoutines.length} 완료)</span>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {todayFiltered.length===0?(
+            <div style={{background:'#fff',borderRadius:16,padding:'24px',textAlign:'center',color:'#9ca3af',fontSize:13,border:'1.5px solid #f3f4f6'}}>
+              <div style={{fontSize:28,marginBottom:6}}>{filterDone==='완료'?'🎉':'✨'}</div>
+              {filterDone==='완료'?'완료한 항목이 없어요':filterDone==='미완료'?'오늘 할 일을 다 했어요! 🎉':'"추천" 버튼으로 시작해보세요!'}
+            </div>
+          ):todayFiltered.map(c=>(
+            <LifeItemCard key={c.id} c={c} onToggle={onToggle} onDelete={onDelete} openEdit={openEdit} updateStreak={updateStreak} lifeItems={lifeItems}/>
+          ))}
+        </div>
       </div>
+
+      {/* 다가오는 루틴 */}
+      {upcomingRoutines.length>0&&(activeSection==='전체'||activeSection==='루틴')&&filterDone==='전체'&&(
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:9}}>다가오는 루틴</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {upcomingRoutines.map(c=>(
+              <div key={c.id} style={{background:'#fff',borderRadius:13,padding:'12px 14px',border:'1.5px solid #f3f4f6',display:'flex',alignItems:'center',gap:10,opacity:0.7}}>
+                <span style={{fontSize:18}}>{c.emoji||'💧'}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:'#374151'}}>{c.text}</div>
+                  <div style={{fontSize:10,color:'#9ca3af',marginTop:1}}>🔄 {getRepeatLabel(c)}</div>
+                </div>
+                <div style={{fontSize:11,fontWeight:700,color:theme.primary,background:theme.bg,padding:'3px 9px',borderRadius:20,border:'1px solid '+theme.mid,whiteSpace:'nowrap',flexShrink:0}}>
+                  {formatNextDate(c.nextDate)}
+                </div>
+                <div style={{display:'flex',gap:4}}>
+                  <button onClick={()=>openEdit(c)} style={{background:'none',border:'none',cursor:'pointer',color:theme.border,fontSize:13,padding:0,width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color=theme.primary} onMouseLeave={e=>e.currentTarget.style.color=theme.border}>✎</button>
+                  <button onClick={()=>onDelete(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:13,padding:0,width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color='#ef4444'} onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 추가 모달 */}
       {showAddModal&&(
@@ -1402,7 +1644,7 @@ function WelcomeScreen({onStart, onLogin}) {
     <div className="fade-in" style={{minHeight:'100vh',background:'linear-gradient(160deg,#f5f3ff 0%,#ede9fe 50%,#ddd6fe 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div style={{textAlign:'center',maxWidth:380,width:'100%'}}>
         <div style={{fontSize:64,marginBottom:16,filter:'drop-shadow(0 4px 12px rgba(124,58,237,0.3))'}}>🏠</div>
-        <h1 style={{fontSize:32,fontWeight:900,color:'#7c3aed',marginBottom:8,letterSpacing:'-1px'}}>mylife.</h1>
+        <h1 style={{fontSize:32,fontWeight:900,color:'#7c3aed',marginBottom:8,letterSpacing:'-1px'}}>LifeFit</h1>
         <p style={{fontSize:16,color:'#6d28d9',marginBottom:6,fontWeight:600}}>혼자 사는 생활, 조금 더 쉽게.</p>
         <p style={{fontSize:14,color:'#a78bfa',marginBottom:40,lineHeight:1.6}}>식재료 · 생활 루틴 · 청소 주기<br/>모두 한 곳에서 관리해요</p>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
@@ -1688,11 +1930,13 @@ function HubPage({foods, lifeItems, onNav}) {
 // ============================================================
 // SETTINGS PAGE
 // ============================================================
-function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, themeId, setThemeId}) {
+function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, themeId, setThemeId, widgets, onSaveWidgets}) {
   const theme=useTheme();
   const [editName, setEditName] = React.useState(userName);
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
+  const [localWidgets, setLocalWidgets] = React.useState(widgets || DEFAULT_WIDGETS);
+  React.useEffect(()=>{ setLocalWidgets(widgets||DEFAULT_WIDGETS); },[widgets]);
 
   async function saveProfile() {
     if(!fb||!user) return;
@@ -1702,7 +1946,9 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
         name: editName.trim(),
         animal,
         themeId,
+        widgets: localWidgets,
       });
+      if(onSaveWidgets) onSaveWidgets(localWidgets);
       if(editName.trim()) await fb.updateProfile(user, {displayName: editName.trim()});
       setUserName(editName.trim());
       setSaved(true);
@@ -1798,6 +2044,53 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
         </div>
       </div>
 
+      {/* 홈 위젯 편집 */}
+      <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:14}}>
+        <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:4}}>🏠 홈 화면 위젯</div>
+        <div style={{fontSize:12,color:'#9ca3af',marginBottom:14}}>홈에서 보여줄 카드를 켜고 끄거나 순서를 바꿔요</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {localWidgets.map((w,idx)=>(
+            <div key={w.id} style={{display:'flex',alignItems:'center',gap:10,padding:'11px 13px',borderRadius:13,background:w.enabled?theme.bg:'#f9fafb',border:'1.5px solid '+(w.enabled?theme.mid:'#f3f4f6'),transition:'all 0.15s'}}>
+              <span style={{fontSize:18,flexShrink:0}}>{w.emoji}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:w.enabled?'#1f2937':'#9ca3af'}}>{w.label}</div>
+              </div>
+              {/* 순서 이동 */}
+              <div style={{display:'flex',flexDirection:'column',gap:2,marginRight:4}}>
+                <button onClick={()=>{
+                  if(idx===0)return;
+                  const n=[...localWidgets];[n[idx-1],n[idx]]=[n[idx],n[idx-1]];setLocalWidgets(n);
+                }} style={{background:'none',border:'1px solid #e5e7eb',borderRadius:5,fontSize:10,color:'#9ca3af',cursor:idx===0?'default':'pointer',padding:'2px 5px',width:'auto',margin:0,opacity:idx===0?0.3:1}}>▲</button>
+                <button onClick={()=>{
+                  if(idx===localWidgets.length-1)return;
+                  const n=[...localWidgets];[n[idx],n[idx+1]]=[n[idx+1],n[idx]];setLocalWidgets(n);
+                }} style={{background:'none',border:'1px solid #e5e7eb',borderRadius:5,fontSize:10,color:'#9ca3af',cursor:idx===localWidgets.length-1?'default':'pointer',padding:'2px 5px',width:'auto',margin:0,opacity:idx===localWidgets.length-1?0.3:1}}>▼</button>
+              </div>
+              {/* 토글 */}
+              <div onClick={()=>{
+                const n=localWidgets.map((x,i)=>i===idx?{...x,enabled:!x.enabled}:x);
+                setLocalWidgets(n);
+              }} style={{
+                width:44,height:24,borderRadius:12,
+                background:w.enabled?theme.primary:'#e5e7eb',
+                position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0,
+              }}>
+                <div style={{
+                  position:'absolute',top:3,
+                  left:w.enabled?22:3,
+                  width:18,height:18,borderRadius:'50%',
+                  background:'#fff',transition:'left 0.2s',
+                  boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={()=>setLocalWidgets(DEFAULT_WIDGETS)} style={{marginTop:10,width:'100%',padding:'9px',borderRadius:10,border:'1px solid #e5e7eb',background:'#fff',color:'#9ca3af',fontSize:12,cursor:'pointer',margin:0,marginTop:10}}>
+          기본값으로 초기화
+        </button>
+      </div>
+
       {/* 앱 정보 */}
       <div style={{background:'#fff',borderRadius:18,padding:'20px 22px',border:'1.5px solid #f3f4f6',marginBottom:20}}>
         {sectionTitle('ℹ️ 앱 정보')}
@@ -1807,7 +2100,7 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
         </div>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0'}}>
           <div style={{fontSize:13,color:'#6b7280'}}>앱 이름</div>
-          <div style={{fontSize:13,fontWeight:700,color:'#7c3aed'}}>mylife.</div>
+          <div style={{fontSize:13,fontWeight:700,color:'#7c3aed'}}>LifeFit</div>
         </div>
       </div>
 
@@ -1990,6 +2283,7 @@ function App() {
   const [userName, setUserName] = React.useState('');
   const [animal, setAnimal] = React.useState('🐻');
   const [themeId, setThemeId] = React.useState('purple');
+  const [widgets, setWidgets] = React.useState(DEFAULT_WIDGETS);
 
   React.useEffect(() => {
     if(!fb || !user || authState !== 'app') return;
@@ -2004,6 +2298,7 @@ function App() {
         setWeeklyLog(d.weeklyLog || {});
         setAnimal(d.animal || '🐻');
         setThemeId(d.themeId || 'purple');
+        if(d.widgets) setWidgets(d.widgets);
       }
     });
 
@@ -2011,9 +2306,25 @@ function App() {
     const unsubFood = fb.onSnapshot(fb.collection(fb.db, 'users', uid, 'foods'), snap => {
       setFoods(snap.docs.map(d => ({id:d.id, ...d.data()})));
     });
-    // 생활관리 실시간
-    const unsubLife = fb.onSnapshot(fb.collection(fb.db, 'users', uid, 'lifeItems'), snap => {
-      setLifeItems(snap.docs.map(d => ({id:d.id, ...d.data()})));
+    // 생활관리 실시간 — 루틴 자동 리셋
+    const unsubLife = fb.onSnapshot(fb.collection(fb.db, 'users', uid, 'lifeItems'), async snap => {
+      const today = getToday();
+      const items = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      // 루틴 중 doneDate가 오늘이 아닌 것들은 자동 리셋
+      const toReset = items.filter(c =>
+        c.section === '루틴' && c.done && c.doneDate !== today
+      );
+      if(toReset.length > 0) {
+        await Promise.all(toReset.map(c =>
+          fb.updateDoc(fb.doc(fb.db,'users',uid,'lifeItems',c.id), {
+            done: false,
+            doneDate: null,
+          })
+        ));
+        // 리셋 후 다시 snapshot이 트리거되므로 여기서 setLifeItems 안 해도 됨
+        return;
+      }
+      setLifeItems(items);
     });
     return () => { unsubFood(); unsubLife(); };
   }, [fb, user, authState]);
@@ -2039,10 +2350,21 @@ function App() {
     if(!fb||!user) return;
     const item = lifeItems.find(c=>c.id===id);
     if(!item) return;
-    await fb.updateDoc(fb.doc(fb.db,'users',user.uid,'lifeItems',id), {
-      done: !item.done,
-      lastDone: !item.done ? getToday() : item.lastDone,
-    });
+    const nowDone = !item.done;
+    const today = getToday();
+    if(item.section === '루틴') {
+      // 루틴: doneDate에 오늘 날짜 저장 (날짜 기반 체크)
+      await fb.updateDoc(fb.doc(fb.db,'users',user.uid,'lifeItems',id), {
+        done: nowDone,
+        doneDate: nowDone ? today : null,
+      });
+    } else {
+      // 청소·생활: 기존 방식 (lastDone 업데이트)
+      await fb.updateDoc(fb.doc(fb.db,'users',user.uid,'lifeItems',id), {
+        done: nowDone,
+        lastDone: nowDone ? today : item.lastDone,
+      });
+    }
   }
   async function deleteLife(id) {
     if(!fb||!user) return;
@@ -2067,6 +2389,12 @@ function App() {
       await fb.updateDoc(fb.doc(fb.db,'users',user.uid), {streak:newStreak, weeklyLog:newLog});
     }
   }
+  async function saveWidgets(newWidgets) {
+    if(!fb||!user) return;
+    setWidgets(newWidgets);
+    await fb.updateDoc(fb.doc(fb.db,'users',user.uid), { widgets: newWidgets });
+  }
+
   async function handleLogout() {
     if(!fb) return;
     await fb.signOut(fb.auth);
@@ -2104,7 +2432,7 @@ function App() {
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#f5f3ff,#ede9fe)'}}>
       <div style={{textAlign:'center'}}>
         <div style={{fontSize:48,marginBottom:12}}>🏠</div>
-        <div style={{fontSize:18,fontWeight:700,color:'#7c3aed'}}>mylife.</div>
+        <div style={{fontSize:18,fontWeight:700,color:'#7c3aed'}}>LifeFit</div>
         <div style={{fontSize:13,color:'#a78bfa',marginTop:6}}>불러오는 중...</div>
       </div>
     </div>
@@ -2149,17 +2477,17 @@ function App() {
         <div className="mobile-topbar" style={{background:'#fff',padding:'12px 18px',borderBottom:'1px solid #f0edf8',alignItems:'center',gap:13,position:'sticky',top:0,zIndex:30}}>
           <button onClick={()=>setSidebarOpen(true)} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,padding:4,color:currentTheme.primary,width:'auto',margin:0}}>☰</button>
           <div style={{fontSize:15,fontWeight:700,color:'#1f2937',flex:1}}>{PAGE_TITLES[page]}</div>
-          <div style={{fontSize:13,fontWeight:900,color:currentTheme.primary}}>mylife<span style={{color:currentTheme.border}}>.</span></div>
+          <div style={{fontSize:13,fontWeight:900,color:currentTheme.primary}}>LifeFit<span style={{color:currentTheme.border}}>.</span></div>
         </div>
 
         {/* 메인 콘텐츠 */}
         <main style={{flex:1,padding:isMob?'16px 14px 90px':'28px 34px',maxWidth:1060,width:'100%',overflowX:'hidden'}}>
-          {page==='home'&&<HomePage foods={foods} lifeItems={lifeItems} streak={streak} onNav={setPage} userName={userName} onQuickAdd={addFood} onQuickCheck={toggleLife}/>}
+          {page==='home'&&<HomePage foods={foods} lifeItems={lifeItems} streak={streak} onNav={setPage} userName={userName} onQuickAdd={addFood} onQuickCheck={toggleLife} widgets={widgets}/>}
           {page==='food'&&<FoodPage foods={foods} onAdd={addFood} onDelete={deleteFood} onEdit={editFood}/>}
           {page==='life'&&<LifePage lifeItems={lifeItems} onAdd={addLife} onToggle={toggleLife} onDelete={deleteLife} onEdit={editLife} streak={streak} weeklyLog={weeklyLog} updateStreak={updateStreak}/>}
           {page==='tips'&&<TipsPage/>}
           {page==='hub'&&<HubPage foods={foods} lifeItems={lifeItems} onNav={setPage}/>}
-          {page==='settings'&&<SettingsPage user={user} fb={fb} userName={userName} setUserName={setUserName} animal={animal} setAnimal={setAnimal} themeId={themeId} setThemeId={setThemeId}/>}
+          {page==='settings'&&<SettingsPage user={user} fb={fb} userName={userName} setUserName={setUserName} animal={animal} setAnimal={setAnimal} themeId={themeId} setThemeId={setThemeId} widgets={widgets} onSaveWidgets={saveWidgets}/>}
         </main>
 
         {/* 모바일 하단 탭 바 */}
