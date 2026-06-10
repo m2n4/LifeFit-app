@@ -3305,29 +3305,8 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
     if(!fb||!user) return;
     setDeleteLoading(true); setDeleteError('');
     try {
-      const isGoogle = user.providerData?.[0]?.providerId === 'google.com';
-
-      // ── 재인증 ──
-      if(isGoogle) {
-        // 구글: 팝업으로 재인증
-        const provider = new fb.GoogleAuthProvider();
-        const result = await fb.signInWithPopup(fb.auth, provider);
-        const cred = fb.GoogleAuthProvider.credentialFromResult(result);
-        if(!cred) throw new Error('구글 재인증에 실패했어요');
-        await fb.reauthenticateWithCredential(user, cred);
-      } else {
-        // 이메일: 비밀번호로 재인증
-        if(!deletePassword.trim()) {
-          setDeleteError('비밀번호를 입력해주세요');
-          setDeleteLoading(false);
-          return;
-        }
-        const cred = fb.EmailAuthProvider.credential(user.email, deletePassword);
-        await fb.reauthenticateWithCredential(user, cred);
-      }
-
-      // ── Firestore 데이터 삭제 ──
       const uid = user.uid;
+      // Firestore 데이터 삭제
       const colls = ['foods','lifeItems','shoppingItems','diaries'];
       for(const col of colls) {
         const snap = await fb.getDocs(fb.collection(fb.db,'users',uid,col));
@@ -3338,22 +3317,16 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
         }
       }
       await fb.deleteDoc(fb.doc(fb.db,'users',uid));
-
-      // ── Firebase Auth 계정 삭제 ──
+      // Firebase Auth 계정 삭제
       await fb.deleteUser(user);
-      // 삭제 성공 시 onAuthStateChanged가 null을 반환해서 자동 로그아웃됨
-
     } catch(e) {
       console.error('Delete account error:', e);
-      const errMap = {
-        'auth/wrong-password':       '비밀번호가 틀렸어요',
-        'auth/invalid-credential':   '비밀번호가 틀렸어요',
-        'auth/requires-recent-login':'다시 로그인 후 시도해주세요',
-        'auth/too-many-requests':    '잠시 후 다시 시도해주세요',
-        'auth/popup-closed-by-user': '팝업이 닫혔어요. 다시 시도해주세요',
-        'auth/cancelled-popup-request':'팝업이 취소됐어요',
-      };
-      setDeleteError(errMap[e.code] || e.message || '오류가 발생했어요');
+      if(e.code === 'auth/requires-recent-login') {
+        // 오래된 세션이면 로그아웃 후 재로그인 유도
+        setDeleteError('보안을 위해 로그아웃 후 다시 로그인하고 삭제해주세요');
+      } else {
+        setDeleteError(e.message || '오류가 발생했어요');
+      }
       setDeleteLoading(false);
     }
   }
@@ -3540,16 +3513,6 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
           </div>
           {deleteStep === 'confirm' && (
             <>
-              {user?.providerData?.[0]?.providerId !== 'google.com' && (
-                <div style={{marginBottom:12}}>
-                  <div style={{fontSize:12,color:'#b91c1c',marginBottom:6,fontWeight:600}}>비밀번호를 입력해 본인 확인을 해주세요</div>
-                  <input
-                    type="password" placeholder="현재 비밀번호"
-                    value={deletePassword} onChange={e=>setDeletePassword(e.target.value)}
-                    style={{width:'100%',padding:'11px 14px',border:'1.5px solid #fecaca',borderRadius:11,fontSize:14,outline:'none',background:'#fff',boxSizing:'border-box',color:'#1f2937'}}
-                  />
-                </div>
-              )}
               <div style={{display:'flex',gap:8}}>
                 <button onClick={handleDeleteAccount} disabled={deleteLoading} style={{
                   flex:1,padding:'12px',borderRadius:12,border:'none',
