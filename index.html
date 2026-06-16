@@ -66,11 +66,11 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="module" id="firebase-init">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot, addDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+<!-- Firebase compat v8 (import 없이 전역 firebase 객체 사용 — Babel과 충돌 없음) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>
   const firebaseConfig = {
     apiKey: "AIzaSyBk7oAh970wN06ZokSBQ42OIXyT_Q91ULY",
     authDomain: "mylife-app-f8568.firebaseapp.com",
@@ -81,17 +81,52 @@
     measurementId: "G-T59TS3GE2P"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const googleProvider = new GoogleAuthProvider();
+  const _app = firebase.initializeApp(firebaseConfig);
+  const _auth = firebase.auth();
+  const _db = firebase.firestore();
+  const _googleProvider = new firebase.auth.GoogleAuthProvider();
 
   window._firebase = {
-    auth, db, googleProvider,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword,
-    signOut, signInWithPopup, signInWithRedirect, getRedirectResult, updateProfile, onAuthStateChanged,
-    GoogleAuthProvider,
-    doc, getDoc, setDoc, updateDoc, collection, onSnapshot, addDoc, deleteDoc, serverTimestamp
+    auth: _auth,
+    db: _db,
+    googleProvider: _googleProvider,
+    signInWithEmailAndPassword: (email, pw) => _auth.signInWithEmailAndPassword(email, pw),
+    createUserWithEmailAndPassword: (email, pw) => _auth.createUserWithEmailAndPassword(email, pw),
+    signOut: () => _auth.signOut(),
+    signInWithPopup: (provider) => _auth.signInWithPopup(provider),
+    signInWithRedirect: (provider) => _auth.signInWithRedirect(provider),
+    getRedirectResult: () => _auth.getRedirectResult(),
+    updateProfile: (user, data) => user.updateProfile(data),
+    onAuthStateChanged: (cb) => _auth.onAuthStateChanged(cb),
+    GoogleAuthProvider: firebase.auth.GoogleAuthProvider,
+    // Firestore helpers — compat API
+    // doc(db, 'col', 'docId') or doc(db, 'col', 'docId', 'subCol', 'subDocId')
+    doc: (db, ...segments) => {
+      // segments: col, doc, col, doc, ...  (always even length → doc ref)
+      let ref = db;
+      for (let i = 0; i < segments.length; i++) {
+        if (i % 2 === 0) ref = ref.collection(segments[i]);
+        else ref = ref.doc(segments[i]);
+      }
+      return ref; // doc reference
+    },
+    // collection(db, 'col') or collection(db, 'col', 'docId', 'subCol')
+    collection: (db, ...segments) => {
+      // segments: col, doc, col, doc, col ...  (always odd length → collection ref)
+      let ref = db;
+      for (let i = 0; i < segments.length; i++) {
+        if (i % 2 === 0) ref = ref.collection(segments[i]);
+        else ref = ref.doc(segments[i]);
+      }
+      return ref; // collection reference
+    },
+    getDoc: (ref) => ref.get(),
+    setDoc: (ref, data, opts) => opts?.merge ? ref.set(data, {merge:true}) : ref.set(data),
+    updateDoc: (ref, data) => ref.update(data),
+    onSnapshot: (ref, cb) => ref.onSnapshot(cb),
+    addDoc: (ref, data) => ref.add(data),
+    deleteDoc: (ref) => ref.delete(),
+    serverTimestamp: () => firebase.firestore.FieldValue.serverTimestamp(),
   };
   window._firebaseReady = true;
   window.dispatchEvent(new Event('firebaseReady'));
