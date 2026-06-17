@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LifeFit — 자취 생활 관리</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- ① Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<!-- ② Firebase 초기화 -->
+<script src="firebase.js"></script>
+
+<!-- ③ React / Babel -->
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+
+<!-- ④ 유틸리티 -->
+<script type="text/babel" data-presets="react" src="js/utils/dateUtils.js"></script>
+<script type="text/babel" data-presets="react" src="js/utils/repeatUtils.js"></script>
+<script type="text/babel" data-presets="react" src="js/utils/constants.js"></script>
+
+<!-- ⑤ 공통 UI 컴포넌트 -->
+<script type="text/babel" data-presets="react" src="js/components/sharedUI.js"></script>
+<script type="text/babel" data-presets="react" src="js/components/Sidebar.js"></script>
+<script type="text/babel" data-presets="react" src="js/components/AuthScreens.js"></script>
+
+<!-- ⑥ 페이지 컴포넌트 -->
+<script type="text/babel" data-presets="react" src="js/pages/HomePage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/FoodPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/ShoppingPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/LifePage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/TipsPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/ReportPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/DiaryPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/MissionPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/SharePage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/HubPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/SettingsPage.js"></script>
+<script type="text/babel" data-presets="react" src="js/pages/OnboardingPage.js"></script>
+
+<!-- ⑦ 앱 진입점 -->
+<script type="text/babel" data-presets="react" src="js/App.js"></script>
+
+</body>
+</html>

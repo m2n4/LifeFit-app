@@ -1,0 +1,59 @@
+/* ── CSS 변수 (라이트) ── */
+:root {
+  --bg-page:    #f8f7fc;
+  --bg-card:    #ffffff;
+  --bg-card2:   #f9fafb;
+  --bg-card3:   #f3f4f6;
+  --bg-input:   #fafafa;
+  --text-primary:  #1f2937;
+  --text-secondary:#374151;
+  --text-tertiary: #6b7280;
+  --text-muted:    #9ca3af;
+  --border:     #f3f4f6;
+  --border2:    #e5e7eb;
+  --border3:    #d1d5db;
+  --divider:    #f0edf8;
+}
+/* ── CSS 변수 (다크) ── */
+body.dark {
+  --bg-page:    #0f172a;
+  --bg-card:    #1e293b;
+  --bg-card2:   #1a2540;
+  --bg-card3:   #243044;
+  --bg-input:   #243044;
+  --text-primary:  #f1f5f9;
+  --text-secondary:#cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted:    #64748b;
+  --border:     #2d3f5a;
+  --border2:    #334155;
+  --border3:    #3d5068;
+  --divider:    #1e3050;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;}
+body{background:var(--bg-page);color:var(--text-primary);transition:background 0.25s,color 0.25s;}
+.emoji{font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif!important;}
+button{font-family:inherit;transition:all 0.15s;}
+button:hover{opacity:0.88;}
+input,select,textarea{font-family:inherit;}
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+.fade-in{animation:fadeIn 0.4s ease forwards;}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+/* 모바일 탭바 */
+.mobile-tab-bar{display:none;}
+@media(max-width:767px){
+  .mobile-tab-bar{display:flex;}
+  .desktop-sidebar{display:none!important;}
+  .mobile-topbar{display:flex!important;}
+}
+@media(min-width:768px){
+  .mobile-topbar{display:none!important;}
+  .mobile-tab-bar{display:none!important;}
+  .desktop-sidebar{display:flex!important;}
+}
+button{-webkit-tap-highlight-color:transparent;}
+input,select,textarea{font-size:16px!important;}
+@media(max-width:767px){input,select,textarea{font-size:16px!important;}}
