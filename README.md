@@ -1,6 +1,6 @@
-# 🏠LifeFit — 자취 생활 관리 웹 애플리케이션
+# 🏠LifeFit — 자취 생활 관리 웹 
 
-> **웹 프로그래밍 기말 프로젝트**
+> **웹시스템설계 기말 프로젝트**
 > 제출일: 2026년 06월 18일
 > 개발 언어: HTML · CSS · JavaScript (React) | 백엔드: Firebase
 > 배포 주소: https://m2n4.github.io/LifeFit/
