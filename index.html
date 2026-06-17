@@ -116,10 +116,11 @@
     },
     getDoc: function(ref){ 
       return ref.get().then(function(snap){
-        var origExists = snap.exists;
-        if(typeof origExists === 'boolean'){
-          snap.exists = function(){ return origExists; };
-        }
+        // compat SDK: exists는 boolean property → 함수로 통일
+        var existsVal = snap.exists;
+        snap.exists = function(){ 
+          return typeof existsVal === 'function' ? existsVal.call(snap) : Boolean(existsVal); 
+        };
         return snap;
       });
     },
@@ -127,7 +128,16 @@
     updateDoc: function(ref,data){ return ref.update(data); },
     addDoc: function(ref,data){ return ref.add(data); },
     deleteDoc: function(ref){ return ref.delete(); },
-    onSnapshot: function(ref,cb){ return ref.onSnapshot(cb); },
+    onSnapshot: function(ref,cb){ 
+      return ref.onSnapshot(function(snap){
+        // 단일 doc 스냅샷인 경우 exists를 함수로 래핑
+        if(snap && typeof snap.exists !== 'function'){
+          var existsVal = snap.exists;
+          snap.exists = function(){ return Boolean(existsVal); };
+        }
+        cb(snap);
+      });
+    },
     getDocs: function(q){ return q.get(); },
     query: function(ref){
       var constraints = Array.prototype.slice.call(arguments,1);
@@ -2683,7 +2693,7 @@ function SharePage({fb, user, lifeItems, foods}) {
     if(!fb||!user) return;
     // 내 공유 코드 가져오기
     fb.getDoc(fb.doc(fb.db,'users',user.uid)).then(snap=>{
-      if(snap.exists()) {
+      if((typeof snap.exists === 'function' ? snap.exists() : Boolean(snap.exists))) {
         const d = snap.data();
         setShareCode(d.shareCode||'');
         setSharedWith(d.sharedWith||[]);
@@ -3577,7 +3587,7 @@ function App() {
         setUser(u);
         // Firestore에서 온보딩 완료 여부 확인
         const snap = await fb.getDoc(fb.doc(fb.db, 'users', u.uid));
-        if(snap.exists() && snap.data().onboarded) {
+        if((typeof snap.exists === 'function' ? snap.exists() : Boolean(snap.exists)) && snap.data().onboarded) {
           setAuthState('app');
         } else {
           setAuthState('onboarding');
@@ -3616,7 +3626,7 @@ function App() {
 
     // 프로필
     fb.getDoc(fb.doc(fb.db, 'users', uid)).then(snap => {
-      if(snap.exists()) {
+      if((typeof snap.exists === 'function' ? snap.exists() : Boolean(snap.exists))) {
         const d = snap.data();
         setUserName(d.name || user.displayName || '');
         setStreak(d.streak || {count:0, lastDate:null});
