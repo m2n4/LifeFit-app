@@ -1,6 +1,6 @@
 # 🏠 LifeFit — 자취 생활 관리 앱
 
-<img src="./screenshots/main.png" width="600"/>
+<img src="./screenshots/main1.png" width="600"/>
 
 - **배포 URL** : https://mylife-app-f8568.web.app
 - **Test ID** : test@lifefit.com
