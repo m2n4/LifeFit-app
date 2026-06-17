@@ -1,5 +1,8 @@
 # 🏠LifeFit — 자취 생활 관리 웹 
 
+![대표사진](대표사진.png)
+
+
 > **웹시스템설계 기말 프로젝트**
 > 제출일: 2026년 06월 18일
 > 개발 언어: HTML · CSS · JavaScript (React) | 백엔드: Firebase
