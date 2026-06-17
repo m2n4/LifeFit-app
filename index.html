@@ -755,6 +755,137 @@ function getGreeting() {
   return {msg:'오늘도 고생했어요 🌙', sub:'내일을 위해 미리 준비해요'};
 }
 
+// ── 페이지별 사용법 배너 ──
+const PAGE_HELP = {
+  home: {
+    title:'홈 화면 사용법',
+    items:[
+      {icon:'🔔', text:'알림 카드 — 유통기한 임박·밀린 관리 항목이 자동으로 표시돼요. 탭하면 해당 페이지로 이동해요.'},
+      {icon:'📊', text:'생활 달성 — 오늘 완료한 항목 비율을 원형 게이지로 확인해요.'},
+      {icon:'⚡', text:'빠른 실행 — 자주 쓰는 기능을 버튼 한 번으로 바로 실행해요.'},
+      {icon:'📅', text:'이번 주 — 요일별 달성 현황을 한눈에 봐요. 🌱 1개↑ 💪 50%↑ 🔥 100%'},
+    ]
+  },
+  food: {
+    title:'식재료 사용법',
+    items:[
+      {icon:'➕', text:'+ 추가 버튼 — 직접 이름·유통기한을 입력해서 추가해요.'},
+      {icon:'⭐', text:'빠른 추가 — 자주 쓰는 재료를 탭 한 번으로 바로 넣어요.'},
+      {icon:'🟢🟡🔴', text:'색상 상태 — 초록(여유) → 노랑(주의) → 주황(임박) → 빨강(위험·초과) 순이에요.'},
+      {icon:'✕', text:'삭제 — 카드 오른쪽 ✕ 를 탭해서 먹었거나 버린 재료를 지워요.'},
+      {icon:'🛒', text:'장보기 탭 — 필요한 것들을 카테고리별로 정리하고 체크해요.'},
+    ]
+  },
+  life: {
+    title:'생활 관리 사용법',
+    items:[
+      {icon:'✅', text:'체크 — 항목 왼쪽 네모를 탭하면 완료 처리돼요. 다음날 자동 초기화.'},
+      {icon:'🌀 🏠 🧹', text:'섹션 구분 — 루틴(매일/주기 반복) · 생활(빨래 등) · 청소(화장실 등) 로 나뉘어요.'},
+      {icon:'< >', text:'날짜 이동 — 과거 기록 확인 및 미래 루틴 미리보기가 가능해요.'},
+      {icon:'⇅', text:'순서 편집 — 미완료 2개 이상이면 ⇅ 버튼으로 순서를 바꿀 수 있어요.'},
+      {icon:'✨', text:'추천 팩 — ✨ 버튼으로 자취 경력에 맞는 항목 세트를 한 번에 추가해요.'},
+      {icon:'📊', text:'📊 버튼 — 월간 달성 히트맵과 최장 연속 기록을 확인해요.'},
+    ]
+  },
+  tips: {
+    title:'생활 팁 사용법',
+    items:[
+      {icon:'📂', text:'카테고리 — 청소·세탁·식재료·자취팁·나만의팁으로 필터링해요.'},
+      {icon:'🔍', text:'검색 — 원하는 키워드로 팁을 바로 찾아요.'},
+      {icon:'✏️', text:'나만의 팁 — + 나만의 팁 버튼으로 직접 노하우를 기록해요.'},
+      {icon:'↓', text:'카드 탭 — 탭하면 상세 내용이 펼쳐져요.'},
+    ]
+  },
+  hub: {
+    title:'추천 사용법',
+    items:[
+      {icon:'🎯', text:'상황별 추천 — 내 식재료·루틴 상태에 따라 지금 필요한 것을 자동 추천해요.'},
+      {icon:'📱', text:'앱 추천 — 자취 생활에 유용한 앱을 카테고리별로 모아뒀어요.'},
+      {icon:'🌐', text:'웹사이트 — 분리수거·공과금·날씨 등 유용한 사이트 모음이에요.'},
+      {icon:'💬', text:'커뮤니티 — 자취 꿀팁 커뮤니티로 바로 이동해요.'},
+    ]
+  },
+  mission: {
+    title:'미션 & 성장 사용법',
+    items:[
+      {icon:'🥚→👑', text:'캐릭터 성장 — 스트릭(연속 달성)이 쌓이면 🥚→🌱→⭐→💎→👑 순서로 성장해요.'},
+      {icon:'📋', text:'주간 미션 — 매주 월요일 초기화돼요. 완료하면 XP를 획득해요.'},
+      {icon:'⚡', text:'XP 획득 — 3일 달성 30XP, 5일 달성 60XP, 완벽한 하루 40XP 등.'},
+    ]
+  },
+  share: {
+    title:'공유 사용법',
+    items:[
+      {icon:'🔑', text:'코드 생성 — 공유 코드 생성 버튼으로 6자리 코드를 만들어요.'},
+      {icon:'📥', text:'연결 — 룸메이트의 코드를 입력하면 서로의 현황을 볼 수 있어요.'},
+      {icon:'📊', text:'현황 비교 — 나와 룸메이트의 오늘 달성률을 나란히 확인해요.'},
+    ]
+  },
+  settings: {
+    title:'설정 사용법',
+    items:[
+      {icon:'🐾', text:'캐릭터 — 이모지를 선택하면 사이드바에 바로 반영돼요.'},
+      {icon:'🎨', text:'색상 — 메인 색상 & 섹션별 색상을 자유롭게 바꿔요.'},
+      {icon:'🌙', text:'다크모드 — 토글로 어두운 화면을 켜고 꺼요.'},
+      {icon:'💾', text:'변경사항 저장 — 이름 수정 후 하단 버튼을 꼭 눌러야 저장돼요.'},
+    ]
+  },
+};
+
+function PageHelp({pageId}) {
+  const theme = useTheme();
+  const help = PAGE_HELP[pageId];
+  const [open, setOpen] = React.useState(false);
+  if(!help) return null;
+  return (
+    <>
+      {/* 고정 ? 버튼 — 항상 화면 우상단 */}
+      <button
+        onClick={()=>setOpen(v=>!v)}
+        title={help.title}
+        style={{
+          position:'fixed', top:60, right:14, zIndex:1000,
+          width:32,height:32,borderRadius:'50%',
+          border:`1.5px solid ${open?theme.primary:theme.mid}`,
+          background:open?theme.primary:C.card,
+          color:open?'#fff':theme.primary,
+          fontSize:14,fontWeight:800,cursor:'pointer',margin:0,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          boxShadow:'0 2px 10px rgba(0,0,0,0.12)',
+          transition:'all 0.15s',
+        }}
+      >?</button>
+
+      {/* 드롭다운 패널 */}
+      {open&&(
+        <>
+          <div onClick={()=>setOpen(false)} style={{position:'fixed',inset:0,zIndex:998}}/>
+          <div style={{
+            position:'fixed', top:98, right:14, zIndex:999,
+            background:C.card, borderRadius:16,
+            border:`1.5px solid ${theme.mid}`,
+            boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
+            padding:'14px 16px',
+            width:270,
+            maxHeight:'70vh',
+            overflowY:'auto',
+            display:'flex',flexDirection:'column',gap:9,
+          }}>
+            <div style={{fontSize:13,fontWeight:800,color:theme.primary,paddingBottom:8,borderBottom:`1px solid ${theme.mid}`}}>{help.title}</div>
+            {help.items.map((item,i)=>(
+              <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start'}}>
+                <span style={{fontSize:13,flexShrink:0,lineHeight:1.5}}>{item.icon}</span>
+                <span style={{fontSize:12,color:C.text2,lineHeight:1.6}}>{item.text}</span>
+              </div>
+            ))}
+            <button onClick={()=>setOpen(false)} style={{marginTop:4,padding:'8px',borderRadius:10,border:`1.5px solid ${theme.mid}`,background:theme.light,color:theme.primary,fontSize:12,fontWeight:700,cursor:'pointer',width:'100%',margin:0}}>닫기</button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function QuickActionBtn({emoji, label, onClick}) {
   const theme = useTheme();
   return (
@@ -850,6 +981,7 @@ function HomePage({foods,lifeItems,streak,weeklyLog,onNav,userName,onQuickAdd,on
   return (
     <div style={{paddingBottom:80}}>
 
+      <PageHelp pageId="home"/>
       {/* ① 환영 헤더 */}
       <div style={{background:'linear-gradient(135deg,'+theme.primary+','+theme.border+')',borderRadius:24,padding:'22px 22px 18px',marginBottom:18,position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',right:-10,top:-10,fontSize:80,opacity:0.08,lineHeight:1}}>🏠</div>
@@ -983,22 +1115,15 @@ function HomePage({foods,lifeItems,streak,weeklyLog,onNav,userName,onQuickAdd,on
         </div>
       )}
 
-      {/* ⑥ 빠른 액션 */}
+      {/* ⑥ 빠른 실행 — 고정 4개 */}
       <div style={{marginBottom:18}}>
-        <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:10}}>⚡ 빠른 실행</div>
-        <div style={{display:'flex',gap:8}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>⚡ 빠른 실행</div>
+        <div style={{fontSize:11,color:C.muted,marginBottom:10}}>자주 쓰는 기능을 바로 실행해요</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
           <QuickActionBtn emoji="🥕" label="식재료 추가" onClick={()=>onNav('food')}/>
-          <QuickActionBtn emoji="🧺" label="빨래 완료" onClick={()=>{
-            const laundry=lifeItems.find(c=>c.text.includes('빨래')&&!isDoneOn(c,getToday()));
-            if(laundry&&onQuickCheck) onQuickCheck(laundry.id);
-            else onNav('life');
-          }}/>
-          <QuickActionBtn emoji="💧" label="물 마시기" onClick={()=>{
-            const water=lifeItems.find(c=>(c.text.includes('물')&&c.section==='루틴')&&!isDoneOn(c,getToday()));
-            if(water&&onQuickCheck) onQuickCheck(water.id);
-            else onNav('life');
-          }}/>
-          <QuickActionBtn emoji="🌀" label="루틴 보기" onClick={()=>onNav('life')}/>
+          <QuickActionBtn emoji="🌀" label="생활 관리" onClick={()=>onNav('life')}/>
+          <QuickActionBtn emoji="🛒" label="장보기" onClick={()=>onNav('food')}/>
+          <QuickActionBtn emoji="💡" label="생활 팁" onClick={()=>onNav('tips')}/>
         </div>
       </div>
 
@@ -1110,7 +1235,10 @@ function FoodPage({foods,onAdd,onDelete,onEdit,fb,user}) {
           <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:3}}>🥕 식재료</div>
           <div style={{fontSize:13,color:C.muted}}>{foodTab==='fridge'?'유통기한을 한눈에 확인하세요':'필요한 것들을 미리 정리해요'}</div>
         </div>
-        {foodTab==='fridge'&&<Btn onClick={()=>{setAddForm({name:'',emoji:'',storage:'냉장',expiryDate:'',purchaseDate:getToday()});setShowAdd(true);}}>+ 추가</Btn>}
+        <div style={{display:'flex',alignItems:'center',gap:7}}>
+          <PageHelp pageId="food"/>
+          {foodTab==='fridge'&&<Btn onClick={()=>{setAddForm({name:'',emoji:'',storage:'냉장',expiryDate:'',purchaseDate:getToday()});setShowAdd(true);}}>+ 추가</Btn>}
+        </div>
       </div>
 
       {/* ── 탭 ── */}
@@ -1157,15 +1285,15 @@ function FoodPage({foods,onAdd,onDelete,onEdit,fb,user}) {
           ))}
         </div>
         {filtered.length===0?<div style={{textAlign:'center',padding:'22px 0',color:C.muted,fontSize:13}}><div style={{fontSize:28,marginBottom:6}}>📭</div>식재료가 없어요!</div>:(
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:8}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7}}>
             {filtered.map(f=>(
-              <div key={f.id} style={{background:f.status.bg,border:`1.5px solid ${f.status.border}`,borderRadius:14,padding:'11px 13px',display:'flex',flexDirection:'column',gap:3,position:'relative'}}>
-                <button onClick={()=>onDelete(f.id)} style={{position:'absolute',top:8,right:8,background:'none',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:12,padding:2,width:'auto',margin:0}} onMouseEnter={e=>e.currentTarget.style.color='#ef4444'} onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</button>
-                <div style={{fontSize:22,marginBottom:2}}>{f.emoji}</div>
-                <div style={{fontSize:13,fontWeight:700,color:C.text}}>{f.name}</div>
-                <div style={{fontSize:11,color:C.muted}}>{SICONS[f.storage]} {f.storage}</div>
-                <div style={{marginTop:4,fontSize:11,fontWeight:700,color:f.status.color,background:C.card,padding:'2px 8px',borderRadius:20,border:`1px solid ${f.status.border}`,display:'inline-block',width:'fit-content'}}>{f.status.label}</div>
-                <button onClick={()=>{setEditTarget(f);setEditForm({name:f.name,emoji:f.emoji,storage:f.storage||'냉장',expiryDate:f.expiryDate,purchaseDate:f.purchaseDate});}} style={{marginTop:3,padding:'4px',borderRadius:7,border:`1px solid ${C.border2}`,background:C.card,color:C.text3,fontSize:11,cursor:'pointer',width:'auto'}}>수정</button>
+              <div key={f.id} style={{background:f.status.bg,border:`1.5px solid ${f.status.border}`,borderRadius:12,padding:'9px 10px',display:'flex',flexDirection:'column',gap:2,position:'relative'}}>
+                <button onClick={()=>onDelete(f.id)} style={{position:'absolute',top:6,right:6,background:'none',border:'none',cursor:'pointer',color:'#d1d5db',fontSize:11,padding:2,width:'auto',margin:0,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#ef4444'} onMouseLeave={e=>e.currentTarget.style.color='#d1d5db'}>✕</button>
+                <div style={{fontSize:18,marginBottom:1}}>{f.emoji}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.text,lineHeight:1.3,paddingRight:14}}>{f.name}</div>
+                <div style={{fontSize:10,color:C.muted}}>{SICONS[f.storage]} {f.storage}</div>
+                <div style={{marginTop:3,fontSize:10,fontWeight:700,color:f.status.color,background:C.card,padding:'1px 6px',borderRadius:20,border:`1px solid ${f.status.border}`,display:'inline-block',width:'fit-content'}}>{f.status.label}</div>
+                <button onClick={()=>{setEditTarget(f);setEditForm({name:f.name,emoji:f.emoji,storage:f.storage||'냉장',expiryDate:f.expiryDate,purchaseDate:f.purchaseDate});}} style={{marginTop:2,padding:'3px',borderRadius:6,border:`1px solid ${C.border2}`,background:C.card,color:C.text3,fontSize:10,cursor:'pointer',width:'100%'}}>수정</button>
               </div>
             ))}
           </div>
@@ -1553,10 +1681,15 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
   // 예정 항목: 아직 주기가 안 된 생활/청소 + 오늘 요일 해당 안 되는 루틴
   const scheduledItems = lifeItems.filter(c => !isDueOn(c, viewDate));
 
-  // order 필드 기준 정렬 (없으면 0)
+  // 섹션 순서: 루틴 → 생활 → 청소
+  const SECTION_ORDER = {'루틴':0, '생활':1, '청소':2};
   const todayUndone = todayItems
     .filter(c => !isDoneOn(c, viewDate))
-    .sort((a,b) => (a.order||0) - (b.order||0));
+    .sort((a,b) => {
+      const so = (SECTION_ORDER[a.section]??9) - (SECTION_ORDER[b.section]??9);
+      if(so !== 0) return so;
+      return (a.order||0) - (b.order||0);
+    });
   const todayDone = todayItems.filter(c => isDoneOn(c, viewDate));
 
   // 순서 이동 함수
@@ -1641,30 +1774,33 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
   return (
     <div>
       {/* ── 헤더 ── */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <div>
-          <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:2}}>🌀 생활 관리</div>
-          <div style={{fontSize:12,color:C.muted}}>
-            {lifeTab==='today'&&'루틴·생활·청소 한눈에'}
-            {lifeTab==='report'&&'월간 달성 기록'}
-            {lifeTab==='diary'&&'오늘을 기억해요 ✍️'}
+      <div style={{marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4}}>
+          <div>
+            <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:2}}>🌀 생활 관리</div>
+            <div style={{fontSize:12,color:C.muted}}>
+              {lifeTab==='today'&&'루틴·생활·청소 한눈에'}
+              {lifeTab==='report'&&'월간 달성 기록'}
+              {lifeTab==='diary'&&'오늘을 기억해요 ✍️'}
+            </div>
           </div>
+          <PageHelp pageId="life"/>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:6}}>
-          {/* 리포트 / 하루기록 아이콘 버튼 */}
-          {[{id:'report',emoji:'📊',tip:'월간 리포트'},{id:'diary',emoji:'📔',tip:'하루 기록'}].map(t=>(
-            <button key={t.id} onClick={()=>setLifeTab(lifeTab===t.id?'today':t.id)} title={t.tip} style={{
-              width:36,height:36,borderRadius:10,border:`1.5px solid ${lifeTab===t.id?theme.primary:theme.mid}`,
+        <div style={{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',marginTop:8}}>
+          {[{id:'report',emoji:'📊',label:'월간리포트'},{id:'diary',emoji:'📔',label:'하루기록'}].map(t=>(
+            <button key={t.id} onClick={()=>setLifeTab(lifeTab===t.id?'today':t.id)} title={t.label} style={{
+              borderRadius:10,border:`1.5px solid ${lifeTab===t.id?theme.primary:theme.mid}`,
               background:lifeTab===t.id?theme.primary:theme.bg,
-              display:'flex',alignItems:'center',justifyContent:'center',
-              fontSize:16,cursor:'pointer',width:'auto',padding:'0 10px',height:34,margin:0,
+              display:'flex',alignItems:'center',gap:4,
+              fontSize:12,fontWeight:600,cursor:'pointer',padding:'5px 10px',margin:0,width:'auto',
+              color:lifeTab===t.id?'#fff':theme.primary,
               transition:'all 0.15s',
               boxShadow:lifeTab===t.id?`0 2px 8px ${theme.primary}44`:'none',
-            }}>{t.emoji}</button>
+            }}><span>{t.emoji}</span><span>{t.label}</span></button>
           ))}
-          <div style={{width:1,height:20,background:theme.mid,margin:'0 2px'}}/>
-          <Btn variant="outline" size="sm" onClick={()=>setShowPackModal(true)}>✨</Btn>
-          <Btn size="sm" onClick={()=>openAdd('루틴')}>+ 추가</Btn>
+          <div style={{width:1,height:20,background:theme.mid}}/>
+          <button onClick={()=>setShowPackModal(true)} style={{padding:'5px 10px',borderRadius:10,border:`1.5px solid ${theme.mid}`,background:theme.bg,color:theme.primary,fontSize:12,fontWeight:600,cursor:'pointer',margin:0,width:'auto',display:'flex',alignItems:'center',gap:3}}><span>✨</span><span>추천팩</span></button>
+          <button onClick={()=>openAdd('루틴')} style={{padding:'5px 12px',borderRadius:10,border:'none',background:theme.primary,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',margin:0,width:'auto'}}>+ 추가</button>
         </div>
       </div>
 
@@ -1802,15 +1938,35 @@ function LifePage({lifeItems,onAdd,onToggle,onDelete,onEdit,streak,weeklyLog,upd
             {isFuture?'미래 날짜는 루틴 구성 미리보기예요':'이 날은 할 일이 없어요'}
           </div>
         ) : (
-          <div style={{display:'flex',flexDirection:'column',gap:7}}>
-            {/* 미완료 */}
-            {todayUndone.map((c,idx)=>(
-              <LifeItemCard key={c.id} c={c} onToggle={onToggle} onDelete={onDelete} openEdit={openEdit} updateStreak={updateStreak} lifeItems={lifeItems} viewDate={viewDate} isReadOnly={isPast||isFuture}
-                showMoveButtons={sortMode&&isToday}
-                onMoveUp={idx>0?()=>handleMoveUp(c.id):null}
-                onMoveDown={idx<todayUndone.length-1?()=>handleMoveDown(c.id):null}
-              />
-            ))}
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {/* 미완료 — 섹션별 그룹 */}
+            {['루틴','생활','청소'].map(sec => {
+              const secItems = todayUndone.filter(c=>c.section===sec);
+              if(secItems.length===0) return null;
+              const SECTIONS_MAP = {'루틴':{icon:'🌀',color:'#7c3aed',bg:'#f5f3ff',border:'#ddd6fe'},'생활':{icon:'🏠',color:'#2563eb',bg:'#eff6ff',border:'#bfdbfe'},'청소':{icon:'🧹',color:'#16a34a',bg:'#f0fdf4',border:'#bbf7d0'}};
+              const s = SECTIONS_MAP[sec];
+              return (
+                <div key={sec}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,paddingLeft:2}}>
+                    <span style={{fontSize:13}}>{s.icon}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:s.color}}>{sec}</span>
+                    <span style={{fontSize:11,color:C.muted,background:s.bg,padding:'1px 7px',borderRadius:20,border:`1px solid ${s.border}`}}>{secItems.length}개</span>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:6,paddingLeft:4,borderLeft:`2px solid ${s.border}`}}>
+                    {secItems.map((c,idx)=>{
+                      const globalIdx = todayUndone.indexOf(c);
+                      return (
+                        <LifeItemCard key={c.id} c={c} onToggle={onToggle} onDelete={onDelete} openEdit={openEdit} updateStreak={updateStreak} lifeItems={lifeItems} viewDate={viewDate} isReadOnly={isPast||isFuture}
+                          showMoveButtons={sortMode&&isToday}
+                          onMoveUp={globalIdx>0?()=>handleMoveUp(c.id):null}
+                          onMoveDown={globalIdx<todayUndone.length-1?()=>handleMoveDown(c.id):null}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
             {/* 완료 구분선 */}
             {todayDone.length>0&&todayUndone.length>0&&(
               <div style={{display:'flex',alignItems:'center',gap:8,margin:'4px 0'}}>
@@ -1969,7 +2125,10 @@ function TipsPage() {
     <div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16}}>
         <div><div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:3}}>💡 생활 가이드</div><div style={{fontSize:13,color:C.muted}}>자취 초보를 위한 생활 꿀팁</div></div>
-        <Btn size="sm" onClick={openAdd}>+ 나만의 팁</Btn>
+        <div style={{display:'flex',gap:7,alignItems:'center'}}>
+          <PageHelp pageId="tips"/>
+          <Btn size="sm" onClick={openAdd}>+ 나만의 팁</Btn>
+        </div>
       </div>
       <div style={{position:'relative',marginBottom:12}}>
         <span style={{position:'absolute',left:13,top:'50%',transform:'translateY(-50%)',fontSize:14,color:C.muted,pointerEvents:'none'}}>🔍</span>
@@ -2572,8 +2731,11 @@ function MissionPage({streak, lifeItems, weeklyLog, animal, foods, fb, user}) {
   return (
     <div>
       <div style={{marginBottom:18}}>
-        <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:3}}>🎯 미션 & 성장</div>
-        <div style={{fontSize:13,color:C.muted}}>이번 주 미션을 완료하고 성장해요</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{fontSize:21,fontWeight:800,color:C.text}}>🎯 미션 & 성장</div>
+          <PageHelp pageId="mission"/>
+        </div>
+        <div style={{fontSize:13,color:C.muted,marginTop:3}}>이번 주 미션을 완료하고 성장해요</div>
       </div>
 
       {/* 캐릭터 성장 카드 */}
@@ -2730,8 +2892,11 @@ function SharePage({fb, user, lifeItems, foods}) {
   return (
     <div>
       <div style={{marginBottom:18}}>
-        <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:3}}>👥 공유</div>
-        <div style={{fontSize:13,color:C.muted}}>룸메이트와 생활 관리를 함께해요</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{fontSize:21,fontWeight:800,color:C.text}}>👥 공유</div>
+          <PageHelp pageId="share"/>
+        </div>
+        <div style={{fontSize:13,color:C.muted,marginTop:3}}>룸메이트와 생활 관리를 함께해요</div>
       </div>
 
       {/* 내 공유 코드 */}
@@ -3155,8 +3320,11 @@ function HubPage({foods, lifeItems, onNav}) {
   return (
     <div>
       <div style={{marginBottom:20}}>
-        <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:3}}>🔖 추천</div>
-        <div style={{fontSize:13,color:C.muted}}>자취 생활에 필요한 것들을 모았어요</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{fontSize:21,fontWeight:800,color:C.text}}>🔖 추천</div>
+          <PageHelp pageId="hub"/>
+        </div>
+        <div style={{fontSize:13,color:C.muted,marginTop:3}}>자취 생활에 필요한 것들을 모았어요</div>
       </div>
 
       {/* 탭 */}
@@ -3286,8 +3454,11 @@ function SettingsPage({user, fb, userName, setUserName, animal, setAnimal, theme
   return (
     <div>
       <div style={{marginBottom:22}}>
-        <div style={{fontSize:21,fontWeight:800,color:C.text,marginBottom:3}}>⚙️ 설정</div>
-        <div style={{fontSize:13,color:C.muted}}>프로필과 앱 스타일을 바꿔요</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{fontSize:21,fontWeight:800,color:C.text}}>⚙️ 설정</div>
+          <PageHelp pageId="settings"/>
+        </div>
+        <div style={{fontSize:13,color:C.muted,marginTop:3}}>프로필과 앱 스타일을 바꿔요</div>
       </div>
 
       {/* 프로필 카드 */}
