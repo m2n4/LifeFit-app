@@ -143,7 +143,7 @@ LifeFit/
 
 | 홈 |
 |---|
-| <img src="./screenshots/home.gif" width="600"/> |
+| <img src="./screenshots/home.png" width="600"/> |
 
 <br>
 
