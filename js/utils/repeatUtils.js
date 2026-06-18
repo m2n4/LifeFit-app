@@ -35,7 +35,15 @@ function getRepeatLabel(r) {
 }
 
 function isTodayItem(r, dateStr) {
-  const ref = dateStr ? new Date(dateStr) : new Date();
+  const ref = dateStr ? new Date(dateStr+'T00:00:00') : new Date();
+  ref.setHours(0,0,0,0);
+
+  // 루틴이 추가된 날(createdAt) 이전 날짜에는 표시하지 않음
+  if(r.createdAt) {
+    const created = new Date(r.createdAt); created.setHours(0,0,0,0);
+    if(ref < created) return false;
+  }
+
   const d = ref.getDay();
   if(r.freq==='daily')    return true;
   if(r.freq==='weekdays') return d>=1&&d<=5;
@@ -44,8 +52,7 @@ function isTodayItem(r, dateStr) {
   if(r.freq==='interval') {
     if(!r.createdAt||!r.intervalDays) return false;
     const c=new Date(r.createdAt); c.setHours(0,0,0,0);
-    const n=new Date(ref); n.setHours(0,0,0,0);
-    return Math.floor((n-c)/864e5)%r.intervalDays===0;
+    return Math.floor((ref-c)/864e5)%r.intervalDays===0;
   }
   if(r.freq==='monthly') return ref.getDate()===(r.monthDay||1);
   return true;
