@@ -155,9 +155,19 @@ function App() {
   async function completeOnboarding(choice, chosenAnimal, chosenTheme) {
     if(!fb||!user) return;
     const uid = user.uid;
-    const presets = (ONBOARDING_PRESETS[choice]||[]).map((item,i) => ({
-      ...item, done:false, lastDone:null, freqDays:[], createdAt:new Date().toISOString()
+    const createdAtISO = new Date().toISOString();
+    const todayStr = getToday();
+    const presets = (ONBOARDING_PRESETS[choice]||[]).map((item) => ({
+      ...item,
+      done: false,
+      lastDone: null,
+      freqDays: item.freqDays || [],
+      createdAt: createdAtISO,
+      startDate: todayStr,
     }));
+    // 중복 방지: 동일한 text의 항목이 이미 있으면 추가하지 않음
+    const existingTexts = new Set(lifeItems.map(it => it.text));
+    const uniquePresets = presets.filter(p => !existingTexts.has(p.text));
     await fb.setDoc(fb.doc(fb.db,'users',uid), {
       name: user.displayName || '',
       onboarded: true,
@@ -167,7 +177,7 @@ function App() {
       animal: chosenAnimal || '🐻',
       themeId: chosenTheme || 'purple',
     }, {merge:true});
-    for(const item of presets) {
+    for(const item of uniquePresets) {
       await fb.addDoc(fb.collection(fb.db,'users',uid,'lifeItems'), item);
     }
     setAnimal(chosenAnimal || '🐻');
@@ -269,4 +279,3 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-
