@@ -206,7 +206,7 @@ function HomePage({foods,lifeItems,streak,weeklyLog,onNav,userName,onQuickAdd,on
   }
 
   // 오늘 루틴 미완료
-  const todayRoutines = lifeItems.filter(c=>c.section==='루틴'&&isTodayItem(c));
+  const todayRoutines = lifeItems.filter(c=>c.section==='루틴'&&isTodayItem(c, getToday()));
   const undoneRoutines = todayRoutines.filter(c=>!isDoneOn(c,getToday()));
   const doneRoutines = todayRoutines.filter(c=>isDoneOn(c,getToday()));
   if(alerts.length < 3 && undoneRoutines.length > 0) alerts.push({
