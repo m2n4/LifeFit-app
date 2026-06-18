@@ -3,7 +3,7 @@
 <img src="./screenshots/main1.png" width="600"/>
 
 - **배포 URL** : https://mylife-app-f8568.web.app
-- 
+
 <br>
 
 ## 프로젝트 소개
