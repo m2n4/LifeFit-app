@@ -3,6 +3,8 @@
 <img src="./screenshots/main1.png" width="600"/>
 
 - **배포 URL** : https://mylife-app-f8568.web.app
+- **Test ID** : test@lifefit.com
+- **Test PW** : 123456
 
 <br>
 
