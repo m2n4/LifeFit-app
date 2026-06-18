@@ -2,7 +2,7 @@
 
 <img src="./screenshots/main1.png" width="600"/>
 
-- **배포 URL** : https://mylife-app-f8568.web.app
+- **배포 URL** : [https://mylife-app-f8568.web.app](https://m2n4.github.io/LifeFit/)
 - **Test ID** : test@lifefit.com
 - **Test PW** : 123456
 
