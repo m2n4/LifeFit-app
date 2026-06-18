@@ -84,7 +84,7 @@ function Onboarding({userName, onComplete}) {
         <div style={{background:theme.bg,borderRadius:14,padding:'12px 14px',border:`1.5px solid ${theme.mid}`,marginBottom:16,display:'flex',alignItems:'center',gap:10}}>
           <span style={{fontSize:24}}>{selectedAnimal}</span>
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:theme.primary}}>{userName||'민아'}님, 수고했어요!</div>
+            <div style={{fontSize:12,fontWeight:700,color:theme.primary}}>{userName||'나'}님, 수고했어요!</div>
             <div style={{fontSize:11,color:theme.border}}>오늘의 명언이 여기 표시돼요</div>
           </div>
         </div>
