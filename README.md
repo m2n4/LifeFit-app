@@ -35,32 +35,7 @@ https://mylife-app-f8568.web.app
 |---|---|
 | ID | test@lifefit.com |
 | PW | 123456 |
- 
-<br>
-### 로컬 실행
- 
-별도의 패키지 설치 없이 실행할 수 있습니다. React와 Firebase를 CDN으로 불러오는 구조이기 때문입니다.
- 
-```bash
-# 1. 저장소 클론
-git clone https://github.com/m2n4/LifeFit.git
- 
-# 2. 프로젝트 폴더로 이동
-cd LifeFit
- 
-# 3. index.html을 브라우저에서 열기
-```
- 
-> ⚠️ `index.html`을 파일로 직접 열면 Firebase 연동이 되지 않을 수 있습니다.
-> VS Code의 **Live Server** 확장 프로그램을 사용하거나, 아래 명령어로 로컬 서버를 실행하세요.
- 
-```bash
-# Python이 설치된 경우
-python -m http.server 5500
- 
-# 이후 브라우저에서 접속
-http://localhost:5500
-```
+
  
 <br>
 
